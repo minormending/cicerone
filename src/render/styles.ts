@@ -45,6 +45,12 @@ export const BOOK_CSS = `
 
 * { box-sizing: border-box; }
 
+/* A display declaration in any rule beats the user agent's
+   [hidden] { display: none }, so every pane styled as flex stayed on screen
+   with the attribute set. This put the dark companion view over the whole
+   page on first load. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--paper);

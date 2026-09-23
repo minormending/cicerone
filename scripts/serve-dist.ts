@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
 
 const DIST = new URL('../dist/', import.meta.url).pathname
-const PORT = Number(process.env['PORT'] ?? 8788)
+const PORT = Number(process.env['PORT'] ?? 8790)
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

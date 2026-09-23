@@ -5,7 +5,7 @@
       "name": "cicerone",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "serve:dist"],
-      "port": 8788
+      "port": 8790
     }
   ]
 }
