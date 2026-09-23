@@ -54,14 +54,25 @@ npm install
 npm test
 npm run build:web
 
+# sign in at the site, press "Copy token for the routine", then once:
+npm run cicerone login TOKEN
+
 # the routine's side of the seam
-npm run cicerone import <wanderlog-key>
+npm run cicerone import KEY
 npm run cicerone pending
-npm run cicerone trip <id> > trip.json
+npm run --silent cicerone trip ID > trip.json
 #  ... the write-the-guide skill researches and writes passages.json ...
-npm run cicerone save <id> passages.json
-npm run cicerone photos <id>
+npm run --silent cicerone check --trip trip.json passages.json   # no database
+npm run cicerone save ID passages.json
+npm run cicerone photos ID
 ```
+
+`--silent` matters wherever output is redirected: without it npm writes its own
+two-line banner into the file.
+
+The session is saved at `~/.config/cicerone/token`, 0600. Refresh tokens
+rotate, so the CLI writes each new one back after every use — copying from the
+site is a one-off rather than a recurring chore.
 
 `save` runs `check` first and refuses on a fault, so the quality bar is code
 rather than a request. `check` can be run by anybody, over any guide, with no

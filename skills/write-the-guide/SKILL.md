@@ -16,12 +16,15 @@ between the fourth stop and the fifth.
 ## The work
 
 ```bash
-npm run cicerone pending              # trips waiting
-npm run cicerone trip <id>            # the graph, its corridors, what may be written
+npm run cicerone pending                         # trips waiting
+npm run --silent cicerone trip ID > trip.json    # the graph and its corridors
 # ... research and write passages.json ...
-npm run cicerone check <id> passages.json   # before saving, as often as you like
-npm run cicerone save  <id> passages.json   # checks, then writes
+npm run --silent cicerone check --trip trip.json passages.json   # offline, as often as you like
+npm run cicerone save ID passages.json           # checks, then writes
 ```
+
+Use `--silent` whenever you redirect output. Without it npm writes a two-line
+banner into your file and the next command cannot parse it.
 
 `trip` gives you every stop and every corridor, and tells you which kinds each
 corridor can take. Work through it subject by subject. Save once, at the end.
