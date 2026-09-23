@@ -219,3 +219,37 @@ test('coverage counts research, not the light every place gets for free', () => 
   assert.equal(result.coverage.placesWritten, 1, 'one researched, not two')
   assert.equal(result.coverage.places, 2)
 })
+
+test('a citation pointing at a front page supports nothing', () => {
+  /*
+   * Five of these had accumulated in a real guide, each with a genuine quoted
+   * sentence behind it. The words are on the site; the link lands on a
+   * homepage where the reader will never find them. That is worse than no
+   * citation, because one reader who follows a link and comes up empty stops
+   * believing the dozens that are exact.
+   */
+  for (const url of ['https://praguehere.com/', 'https://www.expats.cz', 'http://example.org/']) {
+    const result = checkGuide(input([passage({ sources: [{ url, title: 'A site', retrieved: '2026-09-23' }] })]))
+    assert.ok(
+      result.faults.some((f) => f.rule === 'bad-source'),
+      `${url} should be refused`,
+    )
+  }
+})
+
+test('a citation pointing at a page is left alone', () => {
+  // The rule is origin-only on purpose. A deep link is the normal case and
+  // must not be second-guessed — including one whose path is a single slug.
+  for (const url of [
+    'https://www.expats.cz/czech-news/article/dining-out-bruxx',
+    'https://www.praguehere.com/best-kolache-in-prague',
+    'https://example.org/a?b=c',
+  ]) {
+    const result = checkGuide(input([passage({ sources: [{ url, title: 'A page', retrieved: '2026-09-23' }] })]))
+    assert.equal(
+      result.faults.some((f) => f.rule === 'bad-source'),
+      false,
+      `${url} should pass`,
+    )
+  }
+})

@@ -50,6 +50,65 @@ banner into your file and the next command cannot parse it.
 `trip` gives you every stop and every corridor, and tells you which kinds each
 corridor can take. Work through it subject by subject. Save once, at the end.
 
+## Read the notes first. Before sources, before the web.
+
+`trip.json` carries a `note` on many stops: what the traveller typed against
+that stop while planning it. On a well-planned trip that is most of them, and
+it is the most useful thing in the whole pipeline, because **it is the only
+record of why this stop is on this day.** Everything else you can gather —
+ratings, hours, what publishers have written — describes what a place *is*.
+Sixty-six other places sat in that document's standing lists and did not make a
+day. The note is why this one did.
+
+    "Grilled pork banh mi, 6 min from the hotel; fast, which suits an arrival day."
+    "groceries, open to 21:00, on the way to the metro."
+    "Old Masters II, 3 min across the square from Schwarzenberg. Durer's Feast
+     of the Rose Garlands (1506), plus Rembrandt, Goya, the Brueghels…"
+
+Read every note before you research anything. Then:
+
+- **Write about what the note points at.** The Dürer note tells you which of
+  four hundred paintings to spend a paragraph on. Without it you would write
+  about the building.
+- **Never quote it back, and never paraphrase it as though you found it.**
+  They wrote it. Telling somebody their own note is worse than saying nothing —
+  it spends their attention on something they already know and makes the rest
+  of the guide look equally recycled. The note is your brief, not your content.
+- **A constraint in a note is about the traveller, not about that stop.** If
+  one note says a booking is paid, or that a room is closed at weekends, or —
+  as one Prague trip does, in capitals — that they do not eat beef, that holds
+  for the whole trip and every passage in it. Carry it across. Never write
+  something the notes contradict.
+- **No note is not the same as nothing to say.** It means they did not write
+  one. Fall back on where the stop sits: the time it starts, what it sits
+  between, how long they are there, whether they come back to it. A stop at
+  11:00 between a hotel and a cathedral is lunch; a supermarket at 14:30 is a
+  supply run; a stop they return to three times is a base. Say what that makes
+  it, but say it as the reading of a shape and never as a fact about their
+  intentions.
+
+## Where they eat, say what to order — and why it is that
+
+For a place with a kitchen, a passage that does not get as far as a dish has
+not finished. The useful thing is not that the food is good; it is **which
+thing, and what is behind it.** A grain that only grows on that slope, a
+technique a guild protected, a sauce named after the archduke it was cooked
+for, a fish that runs in that river in that month.
+
+Rules, in order:
+
+1. **Honour the constraints in the notes absolutely.** A dish the traveller
+   cannot or will not eat is not a recommendation, it is a wasted passage and a
+   spoiled meal. This is the one place where getting it wrong has a cost the
+   same evening.
+2. **Source the why like anything else.** "Order the duck" is not worth the
+   ink; "order the duck, because X" needs X to be true and held up by a claim.
+3. **One dish, or two.** A list is a menu, and they already have one.
+4. **If the kitchen has nothing behind it, say nothing.** Plenty of good
+   restaurants are simply good restaurants. `place_facts` carries `dishes` from
+   Wanderlog — names only, and a name is a starting point for research, never a
+   finding on its own.
+
 **Read `sources.json` before you search the web.** Wanderlog has already
 gathered what publishers have written about each stop, as a URL plus the actual
 sentence — Lonely Planet, National Geographic, local food writers. On a Prague

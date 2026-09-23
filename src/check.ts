@@ -94,6 +94,23 @@ export function checkGuide(input: CheckInput): CheckResult {
 
     for (const source of passage.sources) {
       if (!/^https?:\/\//.test(source.url)) at('bad-source', `"${source.url}" is not a URL`)
+      /*
+       * A citation that points at a site's front page is decorative.
+       *
+       * Five of them had accumulated here, each with a real quoted sentence
+       * behind it — the words exist on the site, and the link takes the reader
+       * to a homepage where they will not find them. That is worse than no
+       * citation at all: one reader who follows a link and cannot find the
+       * sentence stops believing every other link in the book, including the
+       * dozens that are exact.
+       *
+       * The rule is deliberately narrow. Origin only, with or without a
+       * trailing slash, so `example.com/page` passes and only the thing that
+       * cannot possibly support a sentence is refused.
+       */
+      else if (/^https?:\/\/[^/]+\/?$/.test(source.url)) {
+        at('bad-source', `"${source.url}" is a front page, which supports nothing`)
+      }
     }
 
     // The load-bearing rule. A specific claim without a source is not
