@@ -7,4 +7,8 @@ dist/
 # Written by the Supabase CLI: the linked project ref and a version marker.
 supabase/.temp/
 .probe/
-prague-guide.html
+# Rendered books. Never committed: one contains every address the traveller
+# sleeps at, their bookings and their notes, and the default filename comes
+# from the trip title, so naming them one at a time was always going to miss
+# one. No HTML belongs at the root of this repo — the app's own lives in web/.
+/*.html

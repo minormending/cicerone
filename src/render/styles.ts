@@ -285,7 +285,12 @@ body[data-claims='off'] .claim { display: none; }
   .day { break-before: page; padding-top: 0; }
   .day:first-child { break-before: avoid; }
   .entry, .corridor { break-inside: avoid; }
-  .corridor { margin: 24pt 0 0; padding: 16pt 18pt; border-top: 1.5pt solid var(--coral); }
+  /* The sand band is a screen device. On paper twenty-three of them are the
+     single biggest thing on the page by area, and a laser prints that as a
+     grey slab the prose has to sit inside. The coral rule already does the
+     work the band was doing: this is a new section, look up. */
+  .corridor { margin: 24pt 0 0; padding: 12pt 0 0; border-top: 1.5pt solid var(--coral); background: none; }
+  .route { background: none; padding: 0; }
   figure img { height: 160pt; }
   .dishes { grid-template-columns: repeat(6, 1fr); gap: 6pt; }
   .facts { color: #444; }

@@ -455,3 +455,20 @@ test('a computed passage gets no heading', () => {
   assert.match(html, /class="computed"/, 'the computed passage rendered')
   assert.doesNotMatch(html, /passage-title">Light and angle/)
 })
+
+test('nothing lays down a solid fill on paper', () => {
+  /*
+   * Twenty-three corridors printed as sand-filled slabs for the life of this
+   * stylesheet. The band is a screen device; on paper it is the largest thing
+   * on the page by area and a laser renders it as a grey block with the prose
+   * sitting inside it. The print block has always set a coral rule on the
+   * corridor, which was the intent — it just never cleared the background.
+   */
+  const print = BOOK_CSS.slice(BOOK_CSS.indexOf('@media print'))
+  for (const selector of ['.corridor', '.route', '.own-note']) {
+    const rule = print.slice(print.indexOf(`  ${selector} {`))
+    assert.ok(rule.startsWith(`  ${selector} {`), `${selector} has a print rule`)
+    const body = rule.slice(0, rule.indexOf('}'))
+    assert.match(body, /background: none/, `${selector} clears its fill for paper`)
+  }
+})

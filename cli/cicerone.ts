@@ -18,7 +18,7 @@
  *   cicerone check <id> [file]    check without writing
  *   cicerone import <key>         fetch a Wanderlog trip and store it
  *   cicerone photos <id>          find and store a photograph per subject
- *   cicerone book <id> [out]      render the guide as one standalone file
+ *   cicerone book <id> [out]      render the guide as one standalone file (--print for paper)
  *   cicerone guide <id> [out]     the passages already written, as JSON
  *   cicerone sources <id> [out]   what Wanderlog already cites about each stop
  */
@@ -52,6 +52,7 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone import <wanderlog-key>  fetch a trip and store it
   cicerone photos <id>             find and store a photograph per subject
   cicerone book <id> [out.html]    render the guide as one standalone file
+      --print                      ...as paper would show it, for checking the print styles
   cicerone guide <id> [out.json]   the passages already written, as JSON
   cicerone sources <id> [out.json] what Wanderlog already cites about each stop
 
@@ -596,8 +597,23 @@ async function main(): Promise<void> {
       ...(city ? { city } : {}),
     })
 
-    const out = rest[1] ?? `${saved.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.html`
-    writeFileSync(out, page(saved.title, body), 'utf8')
+    // A flag is not a filename. `cicerone book <id> --print` would otherwise
+    // have written the book to a file called "--print".
+    const named = rest.filter((arg) => !arg.startsWith('--'))
+    const out = named[1] ?? `${saved.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.html`
+    /*
+     * `--print` writes what paper would show, on screen.
+     *
+     * The print stylesheet is the half of this book nobody ever looks at
+     * until they need it, which is how twenty-three corridors came to print
+     * as solid sand blocks. Turning the media query off is the whole trick:
+     * the same rules, evaluated by an ordinary window, so a design meant for
+     * paper can be checked without a printer or a PDF step.
+     */
+    const html = rest.includes('--print')
+      ? page(saved.title, body).replace('@media print {', '@media all {')
+      : page(saved.title, body)
+    writeFileSync(out, html, 'utf8')
     const count = (re: RegExp): number => (body.match(re) ?? []).length
     console.log(
       `${out} — ${count(/class="day"/g)} chapters · ${count(/class="entry"/g)} stops · ` +
