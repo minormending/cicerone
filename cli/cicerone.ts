@@ -21,6 +21,8 @@
  *   cicerone book <id> [out]      render the guide as one standalone file
  */
 import { readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { checkGuide, substantiatedShare, type CheckResult } from '../src/check.ts'
 import { corridorsOf } from '../src/corridor/waking.ts'
@@ -47,10 +49,12 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone photos <id>             find and store a photograph per subject
   cicerone book <id> [out.html]    render the guide as one standalone file
 
-Environment:
-  SUPABASE_URL, SUPABASE_ANON_KEY   the project
-  SUPABASE_REFRESH_TOKEN            overrides the saved session, for CI
-  UNSPLASH_ACCESS_KEY               for \`photos\` only
+Read from .env in the project root, or from the environment:
+  PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY   the project
+  PUBLIC_UNSPLASH_ACCESS_KEY                      for \`photos\` only
+  SUPABASE_REFRESH_TOKEN                          overrides the saved session
+
+The session itself is saved by \`login\` and kept at ~/.config/cicerone/token.
 `
 
 function die(message: string, code = 1): never {
@@ -58,11 +62,34 @@ function die(message: string, code = 1): never {
   process.exit(code)
 }
 
+/**
+ * The project's own `.env`, if there is one.
+ *
+ * Without this every command had to be prefixed with an export of two
+ * variables that were already sitting in a file two directories up, and the
+ * first thing anybody runs fails with a message about names they have never
+ * typed. A variable already in the environment wins, so CI is unaffected.
+ */
+function loadEnv(): void {
+  const file = join(dirname(fileURLToPath(import.meta.url)), '..', '.env')
+  try {
+    process.loadEnvFile(file)
+  } catch {
+    // No .env is normal: CI passes the variables in directly.
+  }
+}
+
 async function connect(): Promise<Store> {
-  const url = process.env['SUPABASE_URL']
-  const anonKey = process.env['SUPABASE_ANON_KEY']
+  loadEnv()
+  // PUBLIC_ is what the web build reads and what the .env carries, so it is
+  // what the CLI reads too. The bare names stay for anything already using
+  // them.
+  const url = process.env['PUBLIC_SUPABASE_URL'] ?? process.env['SUPABASE_URL']
+  const anonKey = process.env['PUBLIC_SUPABASE_ANON_KEY'] ?? process.env['SUPABASE_ANON_KEY']
   const refreshToken = readToken()
-  if (!url || !anonKey) die('Set SUPABASE_URL and SUPABASE_ANON_KEY.')
+  if (!url || !anonKey) {
+    die('No project configured. Set PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY, or put them in .env.')
+  }
   if (!refreshToken) {
     die(
       `No session. Sign in at the site, press "Copy token for the routine",\n` +
@@ -364,7 +391,9 @@ async function main(): Promise<void> {
   if (command === 'photos') {
     const id = rest[0]
     if (!id) die('cicerone photos <id>')
-    if (!process.env['UNSPLASH_ACCESS_KEY']) die('Set UNSPLASH_ACCESS_KEY.')
+    loadEnv()
+    const unsplash = process.env['PUBLIC_UNSPLASH_ACCESS_KEY'] ?? process.env['UNSPLASH_ACCESS_KEY']
+    if (!unsplash) die('No Unsplash key. Set PUBLIC_UNSPLASH_ACCESS_KEY, or put it in .env.')
     const store = await connect()
     const saved = await store.getTrip(id)
     if (!saved) die(`No trip ${id}.`)
@@ -372,7 +401,7 @@ async function main(): Promise<void> {
     let found
     try {
       found = await illustrate(withLegs(saved.graph), {
-        accessKey: process.env['UNSPLASH_ACCESS_KEY'] as string,
+        accessKey: unsplash,
         onProgress: (done, total) => process.stderr.write(`\r  ${done}/${total}`),
       })
     } catch (err) {

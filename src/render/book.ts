@@ -151,8 +151,10 @@ export function mapPoints(places: Place[]): Place[] {
 }
 
 const MAP_W = 800
-const MAP_H = 300
-const MAP_PAD = 26
+const MAP_PAD = 30
+/** A frame shaped like the day, within reason: never a letterbox, never a tower. */
+const MAP_MIN_H = 240
+const MAP_MAX_H = 520
 
 /**
  * The route, drawn as a coral line.
@@ -186,31 +188,40 @@ export function routeSvg(places: Place[]): string {
   const spanY = Math.max(...ys) - Math.min(...ys)
   if (spanX === 0 && spanY === 0) return ''
 
+  // The frame takes the day's proportions rather than the day being squeezed
+  // into a fixed one. Fitting a roughly square walk into a wide box left a
+  // small squiggle adrift in a lot of empty sand.
+  const inner = MAP_W - MAP_PAD * 2
+  const height = spanX > 0
+    ? Math.min(MAP_MAX_H, Math.max(MAP_MIN_H, Math.round((spanY / spanX) * inner) + MAP_PAD * 2))
+    : MAP_MAX_H
+  const mapH = height
+
   // One scale for both axes: that is what makes it a shape rather than a graph.
   const scale = Math.min(
-    spanX > 0 ? (MAP_W - MAP_PAD * 2) / spanX : Infinity,
-    spanY > 0 ? (MAP_H - MAP_PAD * 2) / spanY : Infinity,
+    spanX > 0 ? inner / spanX : Infinity,
+    spanY > 0 ? (mapH - MAP_PAD * 2) / spanY : Infinity,
   )
   const midX = (Math.max(...xs) + Math.min(...xs)) / 2
   const midY = (Math.max(...ys) + Math.min(...ys)) / 2
 
   const xy = raw.map((p) => ({
     x: MAP_W / 2 + (p.x - midX) * scale,
-    y: MAP_H / 2 + (p.y - midY) * scale,
+    y: mapH / 2 + (p.y - midY) * scale,
   }))
 
   const path = xy.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
   const dots = xy
     .map((p, i) =>
       i === 0
-        ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7" fill="var(--coral)" stroke="none"></circle>`
-        : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5.5"></circle>`,
+        ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="10" fill="var(--coral)" stroke="none"></circle>`
+        : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7"></circle>`,
     )
     .join('')
 
-  return `<svg viewBox="0 0 ${MAP_W} ${MAP_H}" role="img" aria-label="The shape of the day on foot, ${points.length} stops">
-<path d="${path}" fill="none" stroke="var(--coral)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path>
-<g fill="var(--paper)" stroke="var(--coral)" stroke-width="2.5">${dots}</g>
+  return `<svg viewBox="0 0 ${MAP_W} ${mapH}" role="img" aria-label="The shape of the day on foot, ${points.length} stops">
+<path d="${path}" fill="none" stroke="var(--coral)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"></path>
+<g fill="var(--paper)" stroke="var(--coral)" stroke-width="3.5">${dots}</g>
 </svg>`
 }
 
