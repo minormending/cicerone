@@ -70,6 +70,46 @@ export interface Leg {
   arriveAt?: string
 }
 
+/**
+ * One end of a flight, as a boarding pass prints it.
+ *
+ * The times are local wall clock at that airport and are stored exactly as the
+ * airline states them, which is the only form a traveller ever needs. No
+ * duration is computed from them: that would need both ends resolved to a real
+ * timezone, and the document's own `utc_offset` for Prague says +60 in a month
+ * when Prague is on +2. A wrong number about a flight is worse than no number.
+ */
+export interface FlightEnd {
+  /** IATA code — JFK, PRG. */
+  iata: string
+  name: string
+  city?: string
+  /** `YYYY-MM-DD`, local to this airport. */
+  date: string
+  /** `HH:MM`, local to this airport. */
+  time: string
+}
+
+/**
+ * A flight the traveller has booked.
+ *
+ * Wanderlog keeps these in a `Flights` section separate from the itinerary,
+ * and a share link can be set to withhold them — the first key this trip was
+ * imported with carried `showReservations: false`, so the section was simply
+ * absent and no amount of parsing would have found it.
+ *
+ * The confirmation number is deliberately not read. It is the one field in the
+ * document that is worth stealing, it earns nothing in a guide that the times
+ * do not, and a rendered book is a file that gets sent to people.
+ */
+export interface Flight {
+  /** As the airline writes it: "DL 78". */
+  number: string
+  airline: string
+  depart: FlightEnd
+  arrive: FlightEnd
+}
+
 export interface Trip {
   id: string
   title: string
@@ -77,6 +117,8 @@ export interface Trip {
   departsOn?: string
   places: Place[]
   legs: Leg[]
+  /** Booked flights, if the share link is set to show reservations. */
+  flights?: Flight[]
 }
 
 /**

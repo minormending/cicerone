@@ -80,3 +80,51 @@ test('a stop with nothing written against it stays silent', () => {
   const hotel = trip.places.find((p) => p.name === 'Hotel Royal Plaza')
   assert.equal(hotel?.note, undefined)
 })
+
+test('the flights come through, with the times the airline states', () => {
+  /*
+   * These were invisible for the life of the importer, and not because of a
+   * parsing bug: the first share key this trip was imported with carried
+   * `showReservations: false`, so Wanderlog withheld the whole section and
+   * there was nothing in the document to find. A second key with reservations
+   * turned on produces it.
+   */
+  const { trip } = tripFromWanderlog(DOC, {})
+  assert.equal(trip.flights?.length, 2)
+  const [out, home] = trip.flights ?? []
+  assert.deepEqual(out?.depart, {
+    iata: 'JFK',
+    name: 'New York John F. Kennedy International Airport',
+    date: '2026-10-14',
+    time: '18:45',
+    city: 'New York',
+  })
+  assert.equal(out?.number, 'DL78')
+  assert.equal(out?.arrive.iata, 'PRG')
+  assert.equal(out?.arrive.time, '09:00')
+  // Flown order, not typed order.
+  assert.equal(home?.number, 'DL79')
+  assert.equal(home?.depart.date, '2026-10-18')
+})
+
+test('a flight carries no confirmation number', () => {
+  /*
+   * The one field in the document worth stealing. It earns a guide nothing
+   * the times do not, and a rendered book is a file people send to each other,
+   * so it is not read at all rather than read and then withheld.
+   */
+  const { trip } = tripFromWanderlog(DOC, {})
+  const serialised = JSON.stringify(trip.flights)
+  assert.doesNotMatch(serialised, /confirmation/i)
+  assert.doesNotMatch(serialised, /travelerNames/i)
+})
+
+test('a trip whose share link hides reservations simply has no flights', () => {
+  // Absence has to be clean: no empty array to be mistaken for "none booked".
+  const withoutFlights = JSON.parse(JSON.stringify(DOC))
+  withoutFlights.tripPlan.itinerary.sections = withoutFlights.tripPlan.itinerary.sections.filter(
+    (s: { type?: string }) => s.type !== 'flights',
+  )
+  const { trip } = tripFromWanderlog(withoutFlights, {})
+  assert.equal(trip.flights, undefined)
+})

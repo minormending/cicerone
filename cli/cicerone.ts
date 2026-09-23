@@ -170,6 +170,10 @@ function brief(trip: Trip) {
 
   return {
     trip: { id: withL.id, title: withL.title, departsOn: withL.departsOn },
+    // The two times nothing else in the document has: when the aircraft
+    // actually leaves and lands, as against when they planned to be at the
+    // airport. Absent unless the share link shows reservations.
+    ...(withL.flights ? { flights: withL.flights } : {}),
     // The days, so a chapter can be written for each. Nothing here is a title:
     // that is the judgement being asked for.
     days: [...new Set(withL.places.map((p) => p.dayIndex).filter((d): d is number => d !== undefined))]

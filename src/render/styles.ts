@@ -146,6 +146,27 @@ a:hover { color: #8F2C24; }
 .passage-title:first-child { margin-top: 0; }
 .corridor-body .passage-title { margin-top: 22px; }
 
+/* ---- flights ---- */
+
+/* Set like the line on a boarding pass: codes and times doing the work, the
+   airline last and quiet, because nobody needs to be told twice who is flying
+   them. Its own row rather than a column inside the day lead, where it would
+   have squeezed the prose into a gutter. */
+.flight {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  margin-top: 26px; padding: 13px 18px;
+  background: var(--sand); border-radius: 10px;
+  font-family: var(--sans); font-size: 14px; color: var(--ink-3);
+}
+.flight-no {
+  font-weight: 600; letter-spacing: 0.06em; color: var(--coral-ink);
+  font-size: 12px; text-transform: uppercase;
+}
+.flight-leg b { font-weight: 600; color: var(--ink); font-size: 16px; }
+.flight-arrow { color: var(--faint); }
+.flight-next { font-size: 10px; color: var(--faint); vertical-align: super; margin-left: 3px; }
+.flight-airline { margin-left: auto; color: var(--faint); font-size: 12px; }
+
 /* ---- the traveller's own note ---- */
 
 /* Coral rather than the sand the rest of the furniture uses. Sand is the
@@ -341,6 +362,7 @@ body[data-claims='off'] .claim { display: none; }
   .facts { color: #444; }
   /* The most practical thing on the page, so it prints — but a tint that is
      invisible on screen turns into a grey slab on paper. Rule only. */
+  .flight { background: none; border: 0.75pt solid var(--rule); padding: 6pt 8pt; }
   .own-note { background: none; border-left: 1.5pt solid var(--coral); padding: 2pt 0 2pt 10pt; }
   .entry .own-note p { font-size: 9.5pt; }
   .route-map { display: none; }

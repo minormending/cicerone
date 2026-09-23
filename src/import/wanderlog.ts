@@ -1,5 +1,5 @@
 import { timezoneForCountry } from '../geo/timezones.ts'
-import type { Coordinates, Place, TransportMode, Trip } from '../domain/types.ts'
+import type { Coordinates, Flight, FlightEnd, Place, TransportMode, Trip } from '../domain/types.ts'
 
 /**
  * Maps a Wanderlog trip document into a trip graph.
@@ -277,6 +277,73 @@ function timeFrom(entry: Record<string, unknown>): string | undefined {
   return undefined
 }
 
+/**
+ * The flights, out of the section Wanderlog keeps them in.
+ *
+ * These are not places and do not belong in the graph: a flight block has no
+ * `place`, so the place walk never sees one, and the two airports are already
+ * stops in their own right. What a flight adds is the pair of times nothing
+ * else in the document has — when the aircraft actually leaves and lands, as
+ * against when the traveller planned to be at the airport.
+ *
+ * Absent entirely unless the share key says `showReservations: true`.
+ */
+export function flightsFrom(document: unknown): Flight[] {
+  const out: Flight[] = []
+  const seen = new Set<unknown>()
+
+  const end = (value: unknown): FlightEnd | undefined => {
+    if (!isRecord(value)) return undefined
+    const airport = isRecord(value['airport']) ? value['airport'] : undefined
+    const iata = airport?.['iata']
+    const name = airport?.['name']
+    const date = value['date']
+    const time = value['time']
+    if (typeof iata !== 'string' || typeof date !== 'string' || typeof time !== 'string') return undefined
+    const city = airport?.['cityName']
+    return {
+      iata,
+      name: typeof name === 'string' ? name : iata,
+      date,
+      time,
+      ...(typeof city === 'string' && city ? { city } : {}),
+    }
+  }
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (!isRecord(node) || seen.has(node)) return
+    seen.add(node)
+
+    if (node['type'] === 'flight') {
+      const info = isRecord(node['flightInfo']) ? node['flightInfo'] : undefined
+      const airline = isRecord(info?.['airline']) ? info['airline'] : undefined
+      const code = airline?.['iata']
+      const number = info?.['number']
+      const depart = end(node['depart'])
+      const arrive = end(node['arrive'])
+      if (depart && arrive && (typeof number === 'number' || typeof number === 'string')) {
+        out.push({
+          number: typeof code === 'string' ? `${code}${number}` : String(number),
+          airline: typeof airline?.['name'] === 'string' ? (airline['name'] as string) : '',
+          depart,
+          arrive,
+        })
+      }
+      return
+    }
+
+    for (const value of Object.values(node)) walk(value)
+  }
+
+  walk(document)
+  // In the order they are flown, not the order they were typed.
+  return out.sort((a, b) => `${a.depart.date}${a.depart.time}`.localeCompare(`${b.depart.date}${b.depart.time}`))
+}
+
 /** Depth-first walk collecting every place-bearing entry under a node. */
 function collectPlaces(
   node: unknown,
@@ -482,6 +549,10 @@ export function tripFromWanderlog(
     legs: [],
   }
   if (departsOn) trip.departsOn = departsOn
+  // Read off the whole document rather than the itinerary: the Flights section
+  // sits beside the days, not inside them.
+  const flights = flightsFrom(document)
+  if (flights.length > 0) trip.flights = flights
   return { trip, report }
 }
 

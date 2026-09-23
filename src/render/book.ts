@@ -1,4 +1,4 @@
-import type { Corridor, Guide, Passage, Photo, Place, PlaceFacts, Subject, Trip } from '../domain/types.ts'
+import type { Corridor, Flight, Guide, Passage, Photo, Place, PlaceFacts, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
 
@@ -117,6 +117,37 @@ function figures(cells: Array<{ n: number; one: string; many: string }>): string
   const cell = ({ n, one, many }: { n: number; one: string; many: string }) =>
     `<div><div class="figure-n">${n}</div><div class="figure-l">${escapeHtml(n === 1 ? one : many)}</div></div>`
   return `<div class="figures">\n${cells.map(cell).join('\n')}\n</div>`
+}
+
+/**
+ * The flights touching a day, set like the line on a boarding pass.
+ *
+ * A flight shows on both days it touches: the day you get on it and the day
+ * you get off, which for a night crossing are different days and the second
+ * one is the one that matters. Times are local to each end and exactly as the
+ * airline states them — no duration, because working one out needs both ends
+ * resolved to a real timezone and this document's own offset for Prague is an
+ * hour wrong in October.
+ */
+function flightStrip(flights: Flight[] | undefined, trip: Trip, dayIndex: number): string {
+  if (!flights || flights.length === 0 || !trip.departsOn) return ''
+  const on = new Date(new Date(trip.departsOn).getTime() + (dayIndex - 1) * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+
+  const rows = flights
+    .filter((f) => f.depart.date === on || f.arrive.date === on)
+    .map((f) => {
+      const overnight = f.arrive.date !== f.depart.date ? '<span class="flight-next">+1</span>' : ''
+      return `<div class="flight">
+<span class="flight-no">${escapeHtml(f.number)}</span>
+<span class="flight-leg">${escapeHtml(f.depart.iata)} <b>${escapeHtml(f.depart.time)}</b></span>
+<span class="flight-arrow">&rarr;</span>
+<span class="flight-leg">${escapeHtml(f.arrive.iata)} <b>${escapeHtml(f.arrive.time)}</b>${overnight}</span>
+<span class="flight-airline">${escapeHtml(f.airline)}</span>
+</div>`
+    })
+  return rows.join('')
 }
 
 /**
@@ -727,6 +758,7 @@ ${
         : ''
     }
 </div>
+${flightStrip(trip.flights, trip, dayIndex)}
 ${figure(chapterPhoto, undefined, city)}
 ${route(stops)}
 ${written.join('\n')}
