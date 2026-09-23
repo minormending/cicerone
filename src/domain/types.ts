@@ -31,6 +31,8 @@ export interface Place {
   note?: string
   /** A photo they attached, which outranks anything we could find. */
   photoUrl?: string
+  /** Wanderlog's own image for this stop, as a key on its image host. */
+  imageKey?: string
   /** Degrees clockwise from north, for the computed light passage. */
   facadeBearing?: number
   /**
@@ -174,14 +176,43 @@ export interface Photo {
   /** Required by Unsplash's API guidelines whatever the licence says. */
   credit?: { name: string; link: string }
   claim: PhotoClaim
-  /** A person who picks a photo has vouched for it; a search has not. */
-  chosenBy: 'auto' | 'person'
+  /**
+ * Where the picture came from, which is what decides whether it may carry the
+ * place's name.
+ *
+ * `search` is a guess from a text query and never earns a name. `import` is
+ * the image attached to this place's own record in the itinerary it came from
+ * — not a result matched to a string, but a photograph filed against this
+ * Google place id — and that is evidence of a different kind. `person` is
+ * somebody who looked at it.
+ */
+  chosenBy: 'auto' | 'person' | 'import'
+}
+
+/**
+ * The practical spine a place hangs on: what the import already knows.
+ *
+ * Read, never derived. These are Google's facts arriving through Wanderlog,
+ * and the app's job is to show them next to the writing rather than to
+ * recompute or verify them — which is the distinction the whole design turns
+ * on and the one the previous app got wrong.
+ */
+export interface PlaceFacts {
+  placeId: string
+  /** One line per day, as Google phrases it. */
+  hours?: string[]
+  rating?: number
+  ratingCount?: number
+  website?: string
+  /** What the kitchen is known for. Names only. */
+  dishes?: Array<{ name: string; imageKey?: string }>
 }
 
 export interface Guide {
   tripId: string
   passages: Passage[]
   photos: Photo[]
+  facts?: Record<string, PlaceFacts>
   /** `YYYY-MM-DD`. */
   builtAt: string
 }

@@ -32,7 +32,7 @@ import { lightPassages } from '../src/light/light.ts'
 import { Store } from '../src/backend/store.ts'
 import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
-import { researchTrip } from '../src/import/wanderlogPlaces.ts'
+import { imageUrl, researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
 import { escapeHtml, renderBook } from '../src/render/book.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
@@ -434,6 +434,36 @@ async function main(): Promise<void> {
     })
     process.stderr.write('\r')
 
+    // Hours, rating and dishes belong to the real place, so they are stored
+    // rather than written into a file somebody has to remember to re-run.
+    const byPlaceId = new Map([...research.values()].map((r) => [r.placeId, r]))
+    await store.saveFacts(
+      [...byPlaceId.values()].map((r) => ({
+        placeId: r.placeId,
+        name: r.name,
+        ...(r.hours ? { hours: r.hours } : {}),
+        ...(r.rating !== undefined ? { rating: r.rating } : {}),
+        ...(r.ratingCount !== undefined ? { ratingCount: r.ratingCount } : {}),
+        ...(r.website ? { website: r.website } : {}),
+        dishes: r.dishes,
+      })),
+    )
+
+    // And the picture the itinerary already carries for each stop, which beats
+    // anything a search can offer: it is filed against this place, not matched
+    // to its name.
+    let images = 0
+    for (const place of saved.graph.places) {
+      if (place.dayIndex === undefined || !place.imageKey) continue
+      await store.savePhoto(id, {
+        subject: { kind: 'place', id: place.id },
+        url: imageUrl(place.imageKey),
+        claim: 'named',
+        chosenBy: 'import',
+      })
+      images++
+    }
+
     const byId = new Map(saved.graph.places.map((p) => [p.id, p]))
     const out = rest[1] ?? 'sources.json'
     writeFileSync(
@@ -451,7 +481,11 @@ async function main(): Promise<void> {
       'utf8',
     )
     const total = [...research.values()].reduce((n, r) => n + r.sources.length, 0)
-    console.log(`${out} — ${research.size} stops, ${total} sourced snippets`)
+    const dishes = [...byPlaceId.values()].reduce((n, r) => n + r.dishes.filter((d) => d.imageKey).length, 0)
+    console.log(
+      `${out} — ${research.size} stops · ${total} sourced snippets · ` +
+        `${images} stop photographs · ${dishes} dish photographs`,
+    )
     return
   }
 
@@ -463,6 +497,9 @@ async function main(): Promise<void> {
     if (!saved) die(`No trip ${id}.`)
 
     const guide = await store.getGuide(id)
+    guide.facts = await store.getFacts(
+      saved.graph.places.map((p) => p.placeId).filter((p): p is string => typeof p === 'string'),
+    )
     const withL = withLegs(saved.graph)
     const city = cityFrom(withL)
     const body = renderBook(withL, guide, {

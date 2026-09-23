@@ -162,6 +162,31 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
 .corridor-body p { margin: 0 0 16px; font-size: 19px; line-height: 1.7; color: #33404F; }
 .corridor-body p:last-child { margin-bottom: 0; }
 
+/* ---- the practical spine: hours, rating, the site ---- */
+
+.facts {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px;
+  margin: -6px 0 20px; padding-bottom: 16px; border-bottom: 1px solid var(--rule);
+  font-family: var(--sans); font-size: 12px; color: var(--faint);
+}
+.facts b { font-weight: 600; color: var(--ink-3); }
+.facts a { color: var(--faint); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.facts a:hover { color: var(--coral-ink); border-color: var(--coral-ink); }
+
+/* ---- what the kitchen is known for ---- */
+
+.dishes {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px; margin: 24px 0 0;
+}
+.dishes figure { margin: 0; }
+/* An explicit auto height is load-bearing here: without it these inherit the
+   300px meant for a chapter photograph and come out stretched. */
+.dishes img { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover;
+  border-radius: 8px; display: block; background: var(--sand); }
+.dishes figcaption { display: block; padding-top: 6px; font-family: var(--sans);
+  font-size: 10px; letter-spacing: 0.04em; color: var(--faint); }
+
 /* ---- computed passages say what they are ---- */
 
 .computed {
@@ -205,6 +230,8 @@ body[data-claims='off'] .claim { display: none; }
   .route-stops span { font-size: 9px; letter-spacing: 0.08em; }
   .route-stops span:not(:first-child):not(:last-child) { display: none; }
   figure img { height: 200px; }
+  .dishes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .facts { font-size: 11px; gap: 4px 14px; }
 }
 
 /* ---- paper survives a dead battery and a roaming charge ---- */
@@ -220,6 +247,8 @@ body[data-claims='off'] .claim { display: none; }
   .entry, .corridor { break-inside: avoid; }
   .corridor { margin: 24pt 0 0; padding: 16pt 18pt; border-top: 1.5pt solid var(--coral); }
   figure img { height: 160pt; }
+  .dishes { grid-template-columns: repeat(6, 1fr); gap: 6pt; }
+  .facts { color: #444; }
   a { color: inherit; text-decoration: none; }
   .claim { color: var(--coral-ink); }
 }

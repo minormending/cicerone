@@ -210,6 +210,7 @@ interface Extracted {
   /** The mode Wanderlog states for arriving here. Almost always absent. */
   travelMode?: TransportMode
   placeId?: string
+  imageKey?: string
 }
 
 /** A section is an object carrying a heading; days and buckets both.
@@ -311,6 +312,16 @@ function collectPlaces(
         if (stated) extracted.travelMode = stated
         const placeId = candidate['place_id']
         if (typeof placeId === 'string' && placeId) extracted.placeId = placeId
+        // The traveller's chosen picture first, then whatever the block holds.
+        const selected = node['selectedImageKey']
+        const keys = node['imageKeys']
+        const image =
+          typeof selected === 'string' && selected
+            ? selected
+            : Array.isArray(keys) && typeof keys[0] === 'string'
+              ? (keys[0] as string)
+              : undefined
+        if (image) extracted.imageKey = image
         out.push(extracted)
       } else {
         // Named but unplaceable. Recorded rather than dropped in silence,
@@ -412,6 +423,7 @@ export function tripFromWanderlog(
       // mode the document states belongs to arriving *here*.
       if (entry.travelMode) place.arriveBy = entry.travelMode
       if (entry.placeId) place.placeId = entry.placeId
+      if (entry.imageKey) place.imageKey = entry.imageKey
       if (entry.region) {
         place.countryCode = entry.region
         if (entry.correctedFrom) {

@@ -21,9 +21,16 @@ import type { Place, Source } from '../domain/types.ts'
  * precise failure the whole claim system exists to prevent. They are dropped
  * rather than downgraded, so nobody can reach for them by accident.
  *
- * `menuItems` comes through as plain names, marked as a hint rather than a
- * source: knowing a kitchen serves svíčková is a fact about the place, and it
- * is not a citation.
+ * `menuItems` comes through as names and images: knowing a kitchen serves
+ * svíčková is a fact about the place, and a photograph of it is worth more in
+ * a guide than any stock picture of a dining room.
+ *
+ * Images resolve on `itin-dev.wanderlogstatic.com/freeImage{,Medium,Small}/`.
+ * An earlier pass here concluded Wanderlog's pictures were unavailable, on the
+ * evidence that `photo_urls` are Google links that answer 403 and that three
+ * guesses at an image URL all returned the single-page app. The answer was in
+ * Wanderlog's own page source the whole time, which is where this should have
+ * looked first.
  *
  * On manners: this is an undocumented endpoint on somebody else's service. It
  * needs no authentication, but Wanderlog's terms are not an invitation to
@@ -40,12 +47,29 @@ export interface PlaceSource extends Source {
   snippet: string
 }
 
+/** Wanderlog's image host. Small is around 80 kB, full around 500 kB. */
+const IMAGE_HOST = 'https://itin-dev.wanderlogstatic.com'
+
+export type ImageSize = 'freeImage' | 'freeImageMedium' | 'freeImageSmall'
+
+export function imageUrl(key: string, size: ImageSize = 'freeImageMedium'): string {
+  return `${IMAGE_HOST}/${size}/${encodeURIComponent(key)}`
+}
+
+export interface Dish {
+  name: string
+  imageKey?: string
+}
+
 export interface PlaceResearch {
   placeId: string
   name: string
-  /** What a kitchen serves. A hint, not a citation. */
-  dishes: string[]
+  dishes: Dish[]
   sources: PlaceSource[]
+  hours?: string[]
+  rating?: number
+  ratingCount?: number
+  website?: string
 }
 
 interface RawSource {
@@ -57,10 +81,16 @@ interface RawSource {
 
 interface RawCard {
   data?: {
-    details?: { name?: unknown }
+    details?: {
+      name?: unknown
+      rating?: unknown
+      user_ratings_total?: unknown
+      website?: unknown
+      opening_hours?: { weekday_text?: unknown }
+    }
     cardData?: {
       sources?: RawSource[]
-      menuItems?: Array<{ name?: unknown }>
+      menuItems?: Array<{ name?: unknown; imageKey?: unknown }>
     }
   }
 }
@@ -116,11 +146,27 @@ export async function researchFor(
     })
   }
 
-  const dishes = (body.data?.cardData?.menuItems ?? [])
-    .map((m) => m?.name)
-    .filter((n): n is string => typeof n === 'string' && n.toLowerCase() !== 'menu')
+  const dishes: Dish[] = (body.data?.cardData?.menuItems ?? [])
+    .filter((m) => typeof m?.name === 'string' && (m.name as string).toLowerCase() !== 'menu')
+    .map((m) => ({
+      name: m.name as string,
+      ...(typeof m.imageKey === 'string' && m.imageKey ? { imageKey: m.imageKey } : {}),
+    }))
 
-  return { placeId, name, dishes, sources }
+  const details = body.data?.details
+  const weekday = details?.opening_hours?.weekday_text
+  const hours = Array.isArray(weekday) ? weekday.filter((h): h is string => typeof h === 'string') : []
+
+  return {
+    placeId,
+    name,
+    dishes,
+    sources,
+    ...(hours.length > 0 ? { hours } : {}),
+    ...(typeof details?.rating === 'number' ? { rating: details.rating } : {}),
+    ...(typeof details?.user_ratings_total === 'number' ? { ratingCount: details.user_ratings_total } : {}),
+    ...(typeof details?.website === 'string' ? { website: details.website } : {}),
+  }
 }
 
 export interface ResearchOptions extends FetchOptions {
@@ -153,8 +199,10 @@ export async function researchTrip(
     }
 
     const found = byPlaceId.get(id)
-    if (found && found.sources.length > 0) {
-      if (!out.has(place.id)) withSources++
+    if (found) {
+      // Kept whenever anything came back: hours and a rating are useful even
+      // where nobody has written a word about the place.
+      if (found.sources.length > 0 && !out.has(place.id)) withSources++
       out.set(place.id, found)
     }
     done++

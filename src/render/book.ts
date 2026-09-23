@@ -1,4 +1,5 @@
-import type { Corridor, Guide, Passage, Photo, Place, Subject, Trip } from '../domain/types.ts'
+import type { Corridor, Guide, Passage, Photo, Place, PlaceFacts, Subject, Trip } from '../domain/types.ts'
+import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
 
 /**
@@ -231,15 +232,85 @@ function figure(photo: Photo | undefined, place: Place | undefined, city: string
   // name — their own photograph, or one they chose having looked at it — so
   // everything found by searching is captioned as the city, which it is.
   const caption = photo.claim === 'named' && place ? place.name : city
+  // Say where it came from, exactly. An imported picture called "your own
+  // photograph" is a small lie about authorship in a book whose whole argument
+  // is that it does not make those.
   const credit = photo.credit
     ? `Photo by <a href="${escapeHtml(photo.credit.link)}?utm_source=cicerone&amp;utm_medium=referral">${escapeHtml(photo.credit.name)}</a> on <a href="https://unsplash.com/?utm_source=cicerone&amp;utm_medium=referral">Unsplash</a>`
-    : 'Your own photograph'
+    : photo.chosenBy === 'import'
+      ? 'From your itinerary'
+      : 'Your own photograph'
 
   return `<figure>
 <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(caption)}" loading="lazy">
 <figcaption><span>${escapeHtml(caption)} &middot; ${credit}</span>
 <button type="button" class="swap" data-swap="${escapeHtml(subjectKey(photo.subject))}">Swap photo</button></figcaption>
 </figure>`
+}
+
+/**
+ * The practical spine: opening hours, what people think, what to order.
+ *
+ * Shown, never derived. These are Google's facts arriving through the import,
+ * and putting them beside the writing is the point — a guide that makes you
+ * open another app to find out whether the place is shut is not a guide. Set
+ * small and quiet, because they are the frame and the prose is the picture.
+ */
+function factsBlock(facts: PlaceFacts | undefined, arrive: string | undefined): string {
+  if (!facts) return ''
+
+  const today = arrive ? openingFor(facts.hours) : undefined
+  const bits: string[] = []
+  if (today) bits.push(`<span><b>Open</b> ${escapeHtml(today)}</span>`)
+  if (facts.rating) {
+    const count = facts.ratingCount ? ` &middot; ${facts.ratingCount.toLocaleString('en-GB')} reviews` : ''
+    bits.push(`<span><b>${facts.rating.toFixed(1)}</b>${count}</span>`)
+  }
+  if (facts.website) {
+    bits.push(`<a href="${escapeHtml(facts.website)}">${escapeHtml(hostOf(facts.website))}</a>`)
+  }
+  if (bits.length === 0) return ''
+  return `<div class="facts">${bits.join('')}</div>`
+}
+
+/** Every day the same, or a range. Anything else is left to the hours list. */
+function openingFor(hours: string[] | undefined): string | undefined {
+  if (!hours || hours.length === 0) return undefined
+  const times = hours.map((h) => h.split(': ').slice(1).join(': ').trim()).filter(Boolean)
+  if (times.length === 0) return undefined
+  const unique = [...new Set(times)]
+  return unique.length === 1 ? (unique[0] as string) : `${times[0] as string} (varies by day)`
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+/**
+ * What the kitchen is known for, as pictures.
+ *
+ * This is the one place a photograph earns its keep on a restaurant. A stock
+ * shot of somebody else's dining room says nothing; six plates from this
+ * kitchen say what you are choosing between.
+ */
+function dishes(facts: PlaceFacts | undefined): string {
+  const all = (facts?.dishes ?? []).filter((d) => d.imageKey)
+  if (all.length < 3) return ''
+  // Three or six, so the grid always tiles. A row of two orphans looks like a
+  // mistake rather than a choice.
+  const withImages = all.slice(0, all.length >= 6 ? 6 : 3)
+  return `<div class="dishes">
+${withImages
+  .map(
+    (d) =>
+      `<figure><img src="${escapeHtml(imageUrl(d.imageKey as string, 'freeImageSmall'))}" alt="${escapeHtml(d.name)}" loading="lazy"><figcaption>${escapeHtml(d.name)}</figcaption></figure>`,
+  )
+  .join('\n')}
+</div>`
 }
 
 const SUN_ICON =
@@ -300,7 +371,13 @@ function renderPassage({ passage, offset }: Numbered): string {
  * A photograph is enough on its own, because a chapter opener is a deliberate
  * element rather than an accident of having computed something.
  */
-function renderPlace(place: Place, passages: Numbered[], photo: Photo | undefined, city: string): string {
+function renderPlace(
+  place: Place,
+  passages: Numbered[],
+  photo: Photo | undefined,
+  city: string,
+  facts: PlaceFacts | undefined,
+): string {
   const researched = passages.some((n) => !n.passage.computed)
   if (!researched && !photo) return ''
 
@@ -312,7 +389,9 @@ ${place.arrive ? `<div class="entry-when">${escapeHtml(place.arrive)}</div>` : '
 </div>
 <div class="entry-body">
 <h2>${escapeHtml(place.name)}</h2>
+${factsBlock(facts, place.arrive)}
 ${passages.map(renderPassage).join('\n')}
+${dishes(facts)}
 ${figure(photo, place, city)}
 </div>
 </section>`
@@ -381,7 +460,8 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
 
     for (const place of stops) {
       const own = place === opener ? undefined : photos.get(`place:${place.id}`)
-      parts.push(renderPlace(place, numbered.get(`place:${place.id}`) ?? [], own, city))
+      const facts = place.placeId ? guide.facts?.[place.placeId] : undefined
+      parts.push(renderPlace(place, numbered.get(`place:${place.id}`) ?? [], own, city, facts))
       const onward = corridors.find((c) => c.fromPlaceId === place.id)
       if (onward) {
         const from = places.get(onward.fromPlaceId)

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Guide, Passage, Photo, Subject, Trip } from '../domain/types.ts'
+import type { Guide, Passage, Photo, PlaceFacts, Subject, Trip } from '../domain/types.ts'
 
 /**
  * Reading and writing trips and guides.
@@ -214,6 +214,51 @@ export class Store {
         computed: p.computed ?? false,
         written_at: p.writtenAt,
       })),
+    )
+    if (error) throw new Error(error.message)
+  }
+
+  /** What the import knows about the places on a trip, by Google place id. */
+  async getFacts(placeIds: string[]): Promise<Record<string, PlaceFacts>> {
+    if (placeIds.length === 0) return {}
+    const { data, error } = await this.#db
+      .from('place_facts')
+      .select('place_id,name,hours,rating,rating_count,website,dishes')
+      .in('place_id', [...new Set(placeIds)])
+    if (error) throw new Error(error.message)
+
+    const out: Record<string, PlaceFacts> = {}
+    for (const row of data as Array<Record<string, unknown>>) {
+      const id = row['place_id'] as string
+      out[id] = {
+        placeId: id,
+        ...(Array.isArray(row['hours']) ? { hours: row['hours'] as string[] } : {}),
+        ...(row['rating'] !== null ? { rating: Number(row['rating']) } : {}),
+        ...(row['rating_count'] !== null ? { ratingCount: row['rating_count'] as number } : {}),
+        ...(row['website'] ? { website: row['website'] as string } : {}),
+        ...(Array.isArray(row['dishes'])
+          ? { dishes: row['dishes'] as NonNullable<PlaceFacts['dishes']> }
+          : {}),
+      }
+    }
+    return out
+  }
+
+  /** Facts are about the real place, so they are keyed on it and shared. */
+  async saveFacts(facts: Array<PlaceFacts & { name: string }>): Promise<void> {
+    if (facts.length === 0) return
+    const { error } = await this.#db.from('place_facts').upsert(
+      facts.map((f) => ({
+        place_id: f.placeId,
+        name: f.name,
+        hours: f.hours ?? null,
+        rating: f.rating ?? null,
+        rating_count: f.ratingCount ?? null,
+        website: f.website ?? null,
+        dishes: f.dishes ?? [],
+        fetched_at: new Date().toISOString(),
+      })),
+      { onConflict: 'place_id' },
     )
     if (error) throw new Error(error.message)
   }

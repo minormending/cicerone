@@ -344,3 +344,15 @@ test('nothing written says so plainly rather than inventing something', () => {
   assert.ok(html.includes('Nothing written for this one'))
   assert.ok(html.includes('padding'))
 })
+
+test('an imported picture does not claim to be yours', () => {
+  // A small lie about authorship, in a book whose whole argument is that it
+  // does not make those.
+  const html = renderBook(
+    TRIP,
+    guide([passage()], [{ subject: { kind: 'place', id: 'vitus' }, url: 'u', claim: 'named', chosenBy: 'import' }]),
+    { corridors: [], city: 'Prague' },
+  )
+  assert.ok(html.includes('From your itinerary'))
+  assert.ok(!html.includes('Your own photograph'))
+})
