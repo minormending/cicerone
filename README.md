@@ -83,7 +83,7 @@ model in the loop.
 | | |
 | --- | --- |
 | `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` | the project; both ship in the bundle by design |
-| `SUPABASE_REFRESH_TOKEN` | your session, for the CLI |
+| `SUPABASE_REFRESH_TOKEN` | overrides the saved session; for CI, not for daily use |
 | `PUBLIC_UNSPLASH_ACCESS_KEY` | photographs; absent, the swap says it is off |
 | `DATABASE_URL` | migrations only |
 
@@ -112,16 +112,24 @@ mostly of atmosphere is the failure this design exists to avoid.
 
 ## Photographs
 
-A photograph captioned as a place is a factual claim, and Unsplash matches on
-user-supplied tags that are often approximate. So a picture earns a place's
-own name only when its **own coordinates** put it within 150 m — not its
-title, not its tags, not the order the results came back in. Everything else
-runs as atmosphere, captioned by city.
+A photograph captioned as a place is a factual claim, so a caption may only
+claim what can be checked.
 
-Any photograph can be swapped, and choosing one by hand makes it captionable
-by name: somebody who knows what the place looks like has supplied the
-evidence the coordinates were standing in for. A chosen picture survives every
-rebuild of the guide.
+Checking it automatically turns out to be impossible. Coordinates were meant
+to be the test — a picture earns a name when its own `position` is within
+150 m — and across four searches of Prague landmarks, not one of thirty-two
+results carried any. `position` is null on effectively every photograph. The
+photographer's own `location.name` is present more often and is not enough
+either: it is still free text somebody typed, and it would license exactly the
+failure the rule exists to prevent.
+
+So **nothing found by searching claims a name.** Chapter openers search the
+city, are captioned by city, and say `atmosphere`, which is exactly true. A
+name requires a person: the traveller's own photograph, or one they picked in
+the swap dialog having looked at it. Where the photographer says a picture was
+taken is shown there — good evidence for a human, insufficient for a machine.
+
+A chosen picture survives every rebuild of the guide.
 
 ## Status
 
