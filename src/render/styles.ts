@@ -188,7 +188,7 @@ body[data-claims='off'] .claim { display: none; }
 @media (max-width: 860px) {
   body { font-size: 17px; }
   .wrap { padding: 0 20px 56px; }
-  .day h1 { font-size: 36px; }
+  .day h1 { font-size: 30px; }
   .day-lead, .entry, .checked { flex-direction: column; gap: 18px; }
   .entry-side { width: auto; padding-top: 0; display: flex; align-items: baseline; gap: 12px; }
   .entry-when { padding-top: 0; }
@@ -198,7 +198,10 @@ body[data-claims='off'] .claim { display: none; }
   .corridor { margin: 40px -20px 0; padding: 32px 20px 34px; }
   .corridor-body { columns: 1; }
   .route { padding: 22px 20px 16px; }
+  /* Five names will not fit across a phone and ran off the edge of the box.
+     The ends are what orient a reader; the middle is on the page below. */
   .route-stops span { font-size: 9px; letter-spacing: 0.08em; }
+  .route-stops span:not(:first-child):not(:last-child) { display: none; }
   figure img { height: 200px; }
 }
 

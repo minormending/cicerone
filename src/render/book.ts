@@ -83,9 +83,24 @@ function dateOf(trip: Trip, dayIndex: number): string {
 
 const ORDINALS = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN']
 
-/** Everything before the first comma, bracket or dash. */
+/**
+ * Everything before the first comma, bracket or dash, minus a trailing word
+ * that says only what kind of place it is.
+ *
+ * "Vinohradský Parlament Restaurant to Antonínovo pekařství" ran to four lines
+ * of heading on a phone, and "Restaurant" was carrying none of them.
+ *
+ * Only words a listing appends, never ones a building is called. Palace,
+ * museum and cathedral stay: "Šternberský" is an adjective, not a name, and
+ * St. Vitus without its cathedral is a saint.
+ */
+const GENERIC_TAIL = /\s+(restaurant|café|cafe|bistro|bar|pub|hotel)$/i
+
 export function shortName(name: string): string {
-  return name.split(/[,(\u2013-]/)[0]?.trim() || name
+  const head = name.split(/[,(\u2013-]/)[0]?.trim() || name
+  const trimmed = head.replace(GENERIC_TAIL, '')
+  // Only when something recognisable is left: "Palace" alone is not a name.
+  return trimmed.length >= 6 ? trimmed : head
 }
 
 /**

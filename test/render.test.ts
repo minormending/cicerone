@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dayTitle, escapeHtml, paragraphs, renderBook, routeSvg } from '../src/render/book.ts'
+import { dayTitle, escapeHtml, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
 import type { Corridor, Guide, Passage, Photo, Place, Trip } from '../src/domain/types.ts'
 
@@ -131,10 +131,22 @@ test('the headline is the history, not the golden hour', () => {
 test('a day is named after its own ends, not after a phrase', () => {
   // An invented title is the first place a guide starts sounding like a
   // brochure.
-  assert.equal(dayTitle([place('a', 'St. Vitus Cathedral'), place('b', 'Vinohradský Parlament')], 'Prague'),
-    'St. Vitus Cathedral to Vinohradský Parlament')
+  assert.equal(
+    dayTitle([place('a', 'St. Vitus Cathedral'), place('b', 'Vinohradský Parlament Restaurant')], 'Prague'),
+    'St. Vitus Cathedral to Vinohradský Parlament',
+  )
   assert.equal(dayTitle([place('a', 'Grébovka (Havlíčkovy sady)')], 'Prague'), 'Grébovka')
   assert.equal(dayTitle([], 'Prague'), 'Prague')
+})
+
+test('a trailing word that only says what kind of place it is comes off', () => {
+  // Four lines of heading on a phone, and "Restaurant" was carrying none.
+  assert.equal(shortName('Vinohradský Parlament Restaurant'), 'Vinohradský Parlament')
+  assert.equal(shortName('Bistró Loreta'), 'Bistró Loreta', 'a leading word is part of the name')
+  // Only words a listing appends, never ones a building is called.
+  assert.equal(shortName('Šternberský Palace'), 'Šternberský Palace')
+  assert.equal(shortName('St. Vitus Cathedral'), 'St. Vitus Cathedral')
+  assert.equal(shortName('Charles Bridge'), 'Charles Bridge')
 })
 
 test('a corridor renders between the places it joins', () => {
