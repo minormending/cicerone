@@ -19,6 +19,7 @@
  *   cicerone import <key>         fetch a Wanderlog trip and store it
  *   cicerone photos <id>          find and store a photograph per subject
  *   cicerone book <id> [out]      render the guide as one standalone file
+ *   cicerone guide <id> [out]     the passages already written, as JSON
  *   cicerone sources <id> [out]   what Wanderlog already cites about each stop
  */
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -51,6 +52,7 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone import <wanderlog-key>  fetch a trip and store it
   cicerone photos <id>             find and store a photograph per subject
   cicerone book <id> [out.html]    render the guide as one standalone file
+  cicerone guide <id> [out.json]   the passages already written, as JSON
   cicerone sources <id> [out.json] what Wanderlog already cites about each stop
 
 Read from .env in the project root, or from the environment:
@@ -286,11 +288,26 @@ function readGuide(file: string, trip: Trip, tripId: string): Guide {
   // Computed light passages are added rather than asked for. The routine has
   // no way to work them out and should not be spending attention trying.
   const researched = written.filter((p) => !p.computed)
+
+  /*
+   * A hand-written passage has no `writtenAt`, and until this it could not be
+   * saved: `check` passed, `save` then died on a not-null constraint from
+   * Postgres, at the last step of the documented workflow. The skill's own
+   * example passage does not carry the field, and it should not have to — the
+   * routine has no reason to invent a date and no way to be right about it.
+   *
+   * Today is the honest default: the passage in this file was written now. One
+   * that came back out through `cicerone guide` already has its own date and
+   * keeps it, so editing an old guide does not backdate the whole book.
+   */
+  const today = new Date().toISOString().slice(0, 10)
+  const stamp = (p: Passage): Passage => (p.writtenAt ? p : { ...p, writtenAt: today })
+
   return {
     tripId,
-    passages: [...researched, ...lightPassages(trip)],
+    passages: [...researched.map(stamp), ...lightPassages(trip).map(stamp)],
     photos: [],
-    builtAt: new Date().toISOString().slice(0, 10),
+    builtAt: today,
   }
 }
 
@@ -440,6 +457,27 @@ async function main(): Promise<void> {
 
     const named = found.filter((p) => p.claim === 'named').length
     console.log(`${found.length} photographs · ${named} can be captioned by name, ${found.length - named} as atmosphere`)
+    return
+  }
+
+  if (command === 'guide') {
+    const id = rest[0]
+    if (!id) die('cicerone guide <id> [out.json]')
+    const store = await connect()
+    if (!(await store.getTrip(id))) die(`No trip ${id}.`)
+
+    const guide = await store.getGuide(id)
+    // `save` replaces a trip's passages wholesale, which left no way to add
+    // one without rewriting all of them from memory. This is the other half
+    // of that command: read the set out, change it, hand it back.
+    const out = rest[1]
+    const json = `${JSON.stringify(guide.passages, null, 2)}\n`
+    if (out) {
+      writeFileSync(out, json, 'utf8')
+      console.log(`${guide.passages.length} passages \u2192 ${out}`)
+    } else {
+      process.stdout.write(json)
+    }
     return
   }
 
