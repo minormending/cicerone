@@ -109,6 +109,13 @@ async function openTrip(id: string): Promise<void> {
   render()
 }
 
+declare global {
+  interface Window {
+    /** Installed by MAP_JS, inlined in index.html. Absent if that script failed. */
+    ciceroneMaps?: () => void
+  }
+}
+
 function render(): void {
   if (!open) return
   const { trip, guide, corridors } = open
@@ -124,6 +131,10 @@ function render(): void {
     book.innerHTML = renderBook(trip, guide, { corridors, ...(cityFrom(trip) ? { city: cityFrom(trip) as string } : {}) })
     book.hidden = false
     nowPane.hidden = true
+    // The routes arrived with that innerHTML, so the maps have to be mounted
+    // again; the script itself is inlined in the shell and loads the library
+    // the first time it finds one.
+    window.ciceroneMaps?.()
   }
   modeBtn.textContent = companion ? 'The book' : 'Where I am now'
 }

@@ -114,6 +114,13 @@ a:hover { color: #8F2C24; }
    height would flatten it back into the line this replaced. */
 .route svg { width: 100%; height: auto; display: block; }
 
+/* The real map, once the tiles are in. The drawing stays in the DOM and comes
+   back for print, where a WebGL canvas cannot be relied on. */
+.route-map { height: clamp(260px, 44vh, 460px); border-radius: 10px; overflow: hidden; }
+.route.has-map svg { display: none; }
+.route.has-map { padding: 10px; }
+.route .maplibregl-ctrl-attrib { font-family: var(--sans); font-size: 10px; }
+
 /* ---- photography ---- */
 
 figure { margin: 44px 0 0; }
@@ -249,6 +256,9 @@ body[data-claims='off'] .claim { display: none; }
   figure img { height: 160pt; }
   .dishes { grid-template-columns: repeat(6, 1fr); gap: 6pt; }
   .facts { color: #444; }
+  .route-map { display: none; }
+  .route.has-map svg { display: block; }
+  .route.has-map { padding: 16pt; }
   a { color: inherit; text-decoration: none; }
   .claim { color: var(--coral-ink); }
 }

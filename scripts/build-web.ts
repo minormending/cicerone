@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import * as esbuild from 'esbuild'
 import { buildLabel } from '../src/build.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
+import { MAP_JS } from '../src/render/maps.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'dist')
@@ -130,8 +131,12 @@ for (const stale of await readdir(dist)) {
 await writeFile(join(dist, bundleName), output.contents)
 
 const template = await readFile(join(root, 'web/index.html'), 'utf8')
-const page = template.replace('/*__CSS__*/', BOOK_CSS).replace('src="app.js"', `src="${bundleName}"`)
+const page = template
+  .replace('/*__CSS__*/', () => BOOK_CSS)
+  .replace('/*__MAPS__*/', () => MAP_JS)
+  .replace('src="app.js"', `src="${bundleName}"`)
 if (!page.includes(bundleName)) throw new Error('index.html does not reference the bundle')
+if (page.includes('/*__MAPS__*/')) throw new Error('index.html kept its map placeholder')
 await writeFile(join(dist, 'index.html'), page, 'utf8')
 
 // Static assets the shell needs offline.

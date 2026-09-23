@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { dayTitle, escapeHtml, mapPoints, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
+import { MAP_JS } from '../src/render/maps.ts'
+import { BOOK_CSS } from '../src/render/styles.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
 import type { Corridor, Guide, Passage, Photo, Place, Trip } from '../src/domain/types.ts'
 
@@ -355,4 +357,37 @@ test('an imported picture does not claim to be yours', () => {
   )
   assert.ok(html.includes('From your itinerary'))
   assert.ok(!html.includes('Your own photograph'))
+})
+
+test('a chapter hands the map the coordinates it needs', () => {
+  // The map is not fetched: it reads the route off the element. A book saved
+  // to a file has to carry its own geography.
+  const html = renderBook(TRIP, guide([passage()]), { corridors: [CORRIDOR] })
+  const found = html.match(/data-route="([^"]+)"/)
+  assert.ok(found, 'the route block carries its coordinates')
+  const route = JSON.parse((found[1] as string).replace(/&quot;/g, '"')) as Array<[number, number]>
+  assert.ok(route.length >= 2)
+  for (const [lon, lat] of route) {
+    // Longitude first, the way GeoJSON and MapLibre want it. Prague is
+    // 50.08N 14.42E, so a swap here would be loud.
+    assert.ok(lon > 13 && lon < 16, `longitude first: got ${lon}`)
+    assert.ok(lat > 49 && lat < 51, `latitude second: got ${lat}`)
+  }
+})
+
+test('the map script survives being a string in a template literal', () => {
+  // BOOK_CSS broke the build twice on a backtick inside a comment. MAP_JS is
+  // the same shape and a great deal easier to get wrong, so it is checked.
+  assert.ok(!MAP_JS.includes('`'), 'no backticks')
+  assert.ok(!MAP_JS.includes('${'), 'no dollar-brace')
+  assert.doesNotThrow(() => new Function(MAP_JS), 'parses as JavaScript')
+})
+
+test('the drawn route is still there underneath the map', () => {
+  // The upgrade is additive. If the tiles never arrive — offline, blocked CDN,
+  // a printer — the page is exactly as good as it was before.
+  const html = renderBook(TRIP, guide([passage()]), { corridors: [CORRIDOR] })
+  assert.match(html, /<div class="route" data-route="[^"]*"><svg/)
+  assert.ok(MAP_JS.includes("classList.add('has-map')"), 'and only hidden once a map loads')
+  assert.ok(BOOK_CSS.includes('.route.has-map svg { display: none; }'))
 })

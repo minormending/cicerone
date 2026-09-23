@@ -226,6 +226,27 @@ export function routeSvg(places: Place[]): string {
 </svg>`
 }
 
+/**
+ * The same points, for the real map that covers the drawing.
+ *
+ * Handed to the page as an attribute rather than fetched, so the map needs
+ * nothing from the backend and a book saved to a file still has its routes.
+ * Five decimal places is about a metre, which is finer than the itinerary
+ * knows and far finer than the frame can show.
+ */
+export function routeData(places: Place[]): string {
+  const points = mapPoints(places).map((p) => p.coords)
+  if (points.length < 2) return ''
+  return JSON.stringify(points.map((p) => [Number(p.lon.toFixed(5)), Number(p.lat.toFixed(5))]))
+}
+
+/** The block a chapter opens with: the drawing, and what a map needs to replace it. */
+function route(places: Place[]): string {
+  const svg = routeSvg(places)
+  if (!svg) return ''
+  return `<div class="route" data-route="${escapeHtml(routeData(places))}">${svg}</div>`
+}
+
 function figure(photo: Photo | undefined, place: Place | undefined, city: string): string {
   if (!photo) return ''
   // A caption may only claim what can be checked. Only a person can earn a
@@ -502,7 +523,7 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
 </div>
 </div>
 ${figure(chapterPhoto, undefined, city)}
-${routeSvg(stops) ? `<div class="route">${routeSvg(stops)}</div>` : ''}
+${route(stops)}
 ${written.join('\n')}
 </section>`)
   }
