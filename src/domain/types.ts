@@ -110,6 +110,26 @@ export interface Flight {
   arrive: FlightEnd
 }
 
+/**
+ * A booked stay, from the lodging section beside the itinerary.
+ *
+ * Dates only, because that is all a hotel booking is: `checkIn` is the night
+ * you first sleep there and `checkOut` is the morning you leave. Unlike a
+ * flight's duration, the number of nights between them is safe to compute —
+ * it is date arithmetic with no timezone in it at all.
+ *
+ * Withheld by the same `showReservations` switch as the flights, and its
+ * confirmation number is ignored for the same reason.
+ */
+export interface Stay {
+  name: string
+  /** Google's id, which is how a stay is matched to the stops it covers. */
+  placeId?: string
+  /** `YYYY-MM-DD`. */
+  checkIn: string
+  checkOut: string
+}
+
 export interface Trip {
   id: string
   title: string
@@ -119,6 +139,8 @@ export interface Trip {
   legs: Leg[]
   /** Booked flights, if the share link is set to show reservations. */
   flights?: Flight[]
+  /** Booked lodging, from the same section and the same switch. */
+  stays?: Stay[]
 }
 
 /**

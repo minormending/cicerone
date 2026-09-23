@@ -174,6 +174,7 @@ function brief(trip: Trip) {
     // actually leaves and lands, as against when they planned to be at the
     // airport. Absent unless the share link shows reservations.
     ...(withL.flights ? { flights: withL.flights } : {}),
+    ...(withL.stays ? { stays: withL.stays } : {}),
     // The days, so a chapter can be written for each. Nothing here is a title:
     // that is the judgement being asked for.
     days: [...new Set(withL.places.map((p) => p.dayIndex).filter((d): d is number => d !== undefined))]

@@ -1,4 +1,4 @@
-import type { Corridor, Flight, Guide, Passage, Photo, Place, PlaceFacts, Subject, Trip } from '../domain/types.ts'
+import type { Corridor, Flight, Guide, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
 
@@ -148,6 +148,44 @@ function flightStrip(flights: Flight[] | undefined, trip: Trip, dayIndex: number
 </div>`
     })
   return rows.join('')
+}
+
+/**
+ * The booked stay, on the two mornings it matters.
+ *
+ * Nights are computed here and a flight's hours are not, which is not an
+ * inconsistency: a night is a whole calendar day apart and needs no timezone
+ * to count, where an hour in the air needs both airports resolved and this
+ * document gets one of them wrong.
+ */
+function stayStrip(stays: Stay[] | undefined, trip: Trip, dayIndex: number): string {
+  if (!stays || stays.length === 0 || !trip.departsOn) return ''
+  const on = new Date(new Date(trip.departsOn).getTime() + (dayIndex - 1) * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+
+  return stays
+    .filter((stay) => stay.checkIn === on || stay.checkOut === on)
+    .map((stay) => {
+      const nights = Math.round(
+        (new Date(stay.checkOut).getTime() - new Date(stay.checkIn).getTime()) / 86_400_000,
+      )
+      const arriving = stay.checkIn === on
+      const tail = arriving
+        ? `${nights} night${nights === 1 ? '' : 's'}, out on ${weekday(stay.checkOut)}`
+        : `in since ${weekday(stay.checkIn)}`
+      return `<div class="flight stay">
+<span class="flight-no">${arriving ? 'Check in' : 'Check out'}</span>
+<span class="flight-leg"><b>${escapeHtml(stay.name)}</b></span>
+<span class="flight-airline">${escapeHtml(tail)}</span>
+</div>`
+    })
+    .join('')
+}
+
+/** "Sunday", for a `YYYY-MM-DD`. */
+function weekday(date: string): string {
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(date))
 }
 
 /**
@@ -759,6 +797,7 @@ ${
     }
 </div>
 ${flightStrip(trip.flights, trip, dayIndex)}
+${stayStrip(trip.stays, trip, dayIndex)}
 ${figure(chapterPhoto, undefined, city)}
 ${route(stops)}
 ${written.join('\n')}

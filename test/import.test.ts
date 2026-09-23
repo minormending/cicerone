@@ -128,3 +128,40 @@ test('a trip whose share link hides reservations simply has no flights', () => {
   const { trip } = tripFromWanderlog(withoutFlights, {})
   assert.equal(trip.flights, undefined)
 })
+
+test('the booked stay comes through, matched by place id', () => {
+  /*
+   * A hotel block is an ordinary place block with a `hotel` record on it, and
+   * it sits in a standing bucket rather than on a day. The same hotel is
+   * separately a stop on four different days and not one of those stops
+   * carries the booking, so the Google place id is the only thing joining
+   * them.
+   */
+  const { trip } = tripFromWanderlog(DOC, {})
+  assert.equal(trip.stays?.length, 1)
+  assert.deepEqual(trip.stays?.[0], {
+    name: 'Hotel Royal Plaza',
+    checkIn: '2026-10-15',
+    checkOut: '2026-10-18',
+    placeId: 'ChIJnyXlNQCVC0cR_seVx2VNEQA',
+  })
+  // The id has to match a scheduled stop, or nothing can be joined up.
+  const stops = trip.places.filter((p) => p.placeId === trip.stays?.[0]?.placeId && p.dayIndex !== undefined)
+  assert.ok(stops.length >= 2, `the hotel is a stop on several days, found ${stops.length}`)
+})
+
+test('a stay carries no confirmation number either', () => {
+  const { trip } = tripFromWanderlog(DOC, {})
+  const serialised = JSON.stringify(trip.stays)
+  assert.doesNotMatch(serialised, /confirmation/i)
+  assert.doesNotMatch(serialised, /travelerNames/i)
+})
+
+test('a trip with no lodging section has no stays', () => {
+  const bare = JSON.parse(JSON.stringify(DOC))
+  bare.tripPlan.itinerary.sections = bare.tripPlan.itinerary.sections.filter(
+    (s: { type?: string }) => s.type !== 'hotels',
+  )
+  const { trip } = tripFromWanderlog(bare, {})
+  assert.equal(trip.stays, undefined)
+})

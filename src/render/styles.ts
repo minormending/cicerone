@@ -166,6 +166,9 @@ a:hover { color: #8F2C24; }
 .flight-arrow { color: var(--faint); }
 .flight-next { font-size: 10px; color: var(--faint); vertical-align: super; margin-left: 3px; }
 .flight-airline { margin-left: auto; color: var(--faint); font-size: 12px; }
+/* A stay is the same furniture with one fewer column: no second airport to
+   arrow towards, so the name carries the line. */
+.stay .flight-leg b { font-size: 15px; }
 
 /* ---- the traveller's own note ---- */
 

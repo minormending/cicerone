@@ -1,5 +1,5 @@
 import { timezoneForCountry } from '../geo/timezones.ts'
-import type { Coordinates, Flight, FlightEnd, Place, TransportMode, Trip } from '../domain/types.ts'
+import type { Coordinates, Flight, FlightEnd, Place, Stay, TransportMode, Trip } from '../domain/types.ts'
 
 /**
  * Maps a Wanderlog trip document into a trip graph.
@@ -344,6 +344,51 @@ export function flightsFrom(document: unknown): Flight[] {
   return out.sort((a, b) => `${a.depart.date}${a.depart.time}`.localeCompare(`${b.depart.date}${b.depart.time}`))
 }
 
+/**
+ * The booked stays, out of the lodging section.
+ *
+ * A hotel block is an ordinary place block with a `hotel` record hung off it,
+ * and it lives in a standing bucket rather than on a day — the same hotel is
+ * separately a stop on four different days, and none of those stops carries
+ * the booking. Matching the two up is what the Google place id is for.
+ */
+export function staysFrom(document: unknown): Stay[] {
+  const out: Stay[] = []
+  const seen = new Set<unknown>()
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (!isRecord(node) || seen.has(node)) return
+    seen.add(node)
+
+    const booking = node['hotel']
+    const place = node['place']
+    if (isRecord(booking) && isRecord(place)) {
+      const checkIn = booking['checkIn']
+      const checkOut = booking['checkOut']
+      const name = place['name']
+      if (typeof checkIn === 'string' && typeof checkOut === 'string' && typeof name === 'string') {
+        const placeId = place['place_id']
+        out.push({
+          name: name.trim(),
+          checkIn,
+          checkOut,
+          ...(typeof placeId === 'string' && placeId ? { placeId } : {}),
+        })
+        return
+      }
+    }
+
+    for (const value of Object.values(node)) walk(value)
+  }
+
+  walk(document)
+  return out.sort((a, b) => a.checkIn.localeCompare(b.checkIn))
+}
+
 /** Depth-first walk collecting every place-bearing entry under a node. */
 function collectPlaces(
   node: unknown,
@@ -553,6 +598,8 @@ export function tripFromWanderlog(
   // sits beside the days, not inside them.
   const flights = flightsFrom(document)
   if (flights.length > 0) trip.flights = flights
+  const stays = staysFrom(document)
+  if (stays.length > 0) trip.stays = stays
   return { trip, report }
 }
 
