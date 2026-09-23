@@ -210,7 +210,9 @@ body[data-claims='off'] .claim { display: none; }
 @media print {
   body { background: #fff; font-size: 11pt; }
   .wrap { max-width: none; padding: 0; }
-  .swap, .controls, .build-tag { display: none; }
+  /* Everything that is chrome rather than the book. The reader owns these ids
+     and the renderer does not, but print is the one place the two meet. */
+  .swap, .controls, .build-tag, #auth, #status, #intro, #now, dialog { display: none; }
   .day { break-before: page; padding-top: 0; }
   .day:first-child { break-before: avoid; }
   .entry, .corridor { break-inside: avoid; }
