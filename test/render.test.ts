@@ -422,3 +422,16 @@ test('the map fades the same way the drawing does', () => {
   assert.ok(MAP_JS.includes("'circle-stroke-opacity'"))
   assert.ok(MAP_JS.includes("t: index / (route.length - 1)"), 'how far through the day each stop is')
 })
+
+test('the stylesheet survives being a string in a template literal', () => {
+  // This has now broken the build three times, always the same way: a
+  // backtick inside a CSS comment, closing the template literal it lives in.
+  // MAP_JS has been guarded since it was written; the stylesheet it was
+  // modelled on never was, which is why the third one got through.
+  assert.ok(!BOOK_CSS.includes('`'), 'no backticks')
+  assert.ok(!BOOK_CSS.includes('${'), 'no dollar-brace')
+  // Braces balance, which catches a comment that swallowed a rule.
+  const open = (BOOK_CSS.match(/{/g) ?? []).length
+  const close = (BOOK_CSS.match(/}/g) ?? []).length
+  assert.equal(open, close, 'every rule closes')
+})

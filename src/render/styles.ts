@@ -121,6 +121,29 @@ a:hover { color: #8F2C24; }
 .route.has-map { padding: 10px; }
 .route .maplibregl-ctrl-attrib { font-family: var(--sans); font-size: 10px; }
 
+/* ---- the traveller's own note ---- */
+
+/* Coral rather than the sand the rest of the furniture uses. Sand is the
+   guide's own voice — corridors, route maps, facts. Coral is this trip, and a
+   note is the only thing on the page that belongs to the person reading it. */
+.own-note {
+  margin: 26px 0 0; padding: 14px 18px 4px;
+  background: rgba(226, 87, 76, 0.055);
+  border-left: 2px solid var(--coral); border-radius: 0 10px 10px 0;
+}
+.own-note .label { color: var(--coral-ink); }
+/* The sans and a step down in size, so a long note never reads as another
+   paragraph of the book. Scoped under .entry deliberately: the .entry p rule
+   is declared later in this sheet at the same specificity, and an unscoped
+   .own-note p loses font-size, colour and leading to it while keeping the
+   family — which renders a note in twenty-point sans and looks like a
+   mistake rather than a voice. */
+.entry .own-note p {
+  font-family: var(--sans); font-size: 15px; line-height: 1.6;
+  color: var(--ink-3); margin: 7px 0 10px;
+}
+.own-link { color: var(--coral-ink); text-decoration: underline; text-underline-offset: 2px; }
+
 /* ---- photography ---- */
 
 figure { margin: 44px 0 0; }
@@ -256,6 +279,10 @@ body[data-claims='off'] .claim { display: none; }
   figure img { height: 160pt; }
   .dishes { grid-template-columns: repeat(6, 1fr); gap: 6pt; }
   .facts { color: #444; }
+  /* The most practical thing on the page, so it prints — but a tint that is
+     invisible on screen turns into a grey slab on paper. Rule only. */
+  .own-note { background: none; border-left: 1.5pt solid var(--coral); padding: 2pt 0 2pt 10pt; }
+  .entry .own-note p { font-size: 9.5pt; }
   .route-map { display: none; }
   .route.has-map svg { display: block; }
   .route.has-map { padding: 16pt; }

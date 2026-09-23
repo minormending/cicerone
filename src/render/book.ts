@@ -453,11 +453,62 @@ ${place.arrive ? `<div class="entry-when">${escapeHtml(place.arrive)}</div>` : '
 <div class="entry-body">
 <h2>${escapeHtml(place.name)}</h2>
 ${factsBlock(facts, place.arrive)}
+${ownNote(place)}
 ${passages.map(renderPassage).join('\n')}
 ${dishes(facts)}
 ${figure(photo, place, city)}
 </div>
 </section>`
+}
+
+/**
+ * What the traveller wrote here, in their own voice and marked as theirs.
+ *
+ * This is the one thing on the page the guide did not write, and it has to
+ * look like it. Everything else here is research — prose in the serif, facts
+ * in the sans, a corridor in its sand band — and all of it speaks in the same
+ * voice from the outside. A note is the reader talking to themselves three
+ * weeks ago: "6 min from the hotel; fast, which suits an arrival day", a
+ * booking marked PAID, a price, a warning about what not to order.
+ *
+ * So it gets a coral wash and a coral rule rather than the sand the rest of
+ * the furniture uses, because coral is this trip's own colour and that is
+ * exactly the claim being made. It sits after the facts and before the prose,
+ * because it is the brief: it says why this stop is on the day, and the
+ * passages under it are the answer to that.
+ *
+ * It is never edited, reflowed or summarised. Shortening somebody's own note
+ * for them is the one unforgivable thing to do to it.
+ */
+function ownNote(place: Place): string {
+  const note = place.note?.trim()
+  if (!note) return ''
+  const lines = note
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${linkify(escapeHtml(line))}</p>`)
+    .join('')
+  return `<aside class="own-note"><div class="label">Your note</div>${lines}</aside>`
+}
+
+/**
+ * A URL pasted into a note, shown as its host.
+ *
+ * People paste booking links into these and they run to three lines of
+ * tracking parameters. The host is what a reader needs — it says which
+ * service the booking is with — and the link still goes to the full URL.
+ */
+function linkify(escaped: string): string {
+  return escaped.replace(/https?:\/\/[^\s<]+/g, (url) => {
+    let host: string
+    try {
+      host = new URL(url.replace(/&amp;/g, '&')).hostname.replace(/^www\./, '')
+    } catch {
+      return url
+    }
+    return `<a class="own-link" href="${url}">${escapeHtml(host)}</a>`
+  })
 }
 
 function renderCorridor(corridor: Corridor, from: Place, to: Place, passages: Numbered[]): string {
