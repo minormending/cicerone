@@ -153,6 +153,28 @@ export function mapPoints(places: Place[]): Place[] {
 
 const MAP_W = 800
 const MAP_PAD = 30
+
+/**
+ * How the day reads in one direction rather than none.
+ *
+ * A closed coral loop with eight identical rings on it is a map of where the
+ * day went and says nothing about which way round it went, which is half of
+ * what a route is for. So the line and the rings fade from the first stop to
+ * the last: strongest where you start, faintest where you end up.
+ *
+ * The floor is 0.4 rather than nothing, because the last stop of a day is not
+ * less important than the first, only later. Below about a third it stops
+ * being a pale mark and starts being a missing one.
+ */
+const FADE_FROM = 1
+const FADE_TO = 0.4
+const LINE_FROM = 0.95
+const LINE_TO = 0.3
+
+/** Where along the route this is, as an opacity. */
+function fade(t: number, from: number, to: number): number {
+  return Number((from + (to - from) * t).toFixed(3))
+}
 /** A frame shaped like the day, within reason: never a letterbox, never a tower. */
 const MAP_MIN_H = 240
 const MAP_MAX_H = 520
@@ -211,17 +233,35 @@ export function routeSvg(places: Place[]): string {
     y: mapH / 2 + (p.y - midY) * scale,
   }))
 
-  const path = xy.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+  // One path per leg, so each can carry its own opacity. The round caps of two
+  // neighbouring legs overlap at the stop between them, and every stop has a
+  // dot drawn over it, so the join never shows.
+  const last = xy.length - 1
+  const legs: string[] = []
+  for (let i = 1; i <= last; i++) {
+    const from = xy[i - 1]
+    const to = xy[i]
+    if (!from || !to) continue
+    const d = `M${from.x.toFixed(1)} ${from.y.toFixed(1)} L${to.x.toFixed(1)} ${to.y.toFixed(1)}`
+    legs.push(
+      `<path d="${d}" opacity="${fade((i - 0.5) / last, LINE_FROM, LINE_TO)}"></path>`,
+    )
+  }
+
   const dots = xy
     .map((p, i) =>
       i === 0
         ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="10" fill="var(--coral)" stroke="none"></circle>`
-        : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7"></circle>`,
+        : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7" stroke-opacity="${fade(
+            i / last,
+            FADE_FROM,
+            FADE_TO,
+          )}"></circle>`,
     )
     .join('')
 
-  return `<svg viewBox="0 0 ${MAP_W} ${mapH}" role="img" aria-label="The shape of the day on foot, ${points.length} stops">
-<path d="${path}" fill="none" stroke="var(--coral)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"></path>
+  return `<svg viewBox="0 0 ${MAP_W} ${mapH}" role="img" aria-label="The shape of the day on foot, ${points.length} stops, fading from the first to the last">
+<g fill="none" stroke="var(--coral)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${legs.join('')}</g>
 <g fill="var(--paper)" stroke="var(--coral)" stroke-width="3.5">${dots}</g>
 </svg>`
 }

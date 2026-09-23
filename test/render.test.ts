@@ -391,3 +391,34 @@ test('the drawn route is still there underneath the map', () => {
   assert.ok(MAP_JS.includes("classList.add('has-map')"), 'and only hidden once a map loads')
   assert.ok(BOOK_CSS.includes('.route.has-map svg { display: none; }'))
 })
+
+test('the route fades from the first stop to the last, so it reads in order', () => {
+  // A closed loop with identical rings on it says where the day went and not
+  // which way round, which is half of what a route is for.
+  const at = (id: string, lat: number, lon: number): Place => ({ id, name: id, coords: { lat, lon }, dayIndex: 1 })
+  const svg = routeSvg([
+    at('a', 50.080, 14.400),
+    at('b', 50.085, 14.410),
+    at('c', 50.090, 14.420),
+    at('d', 50.095, 14.430),
+  ])
+
+  const legs = [...svg.matchAll(/<path [^>]*opacity="([\d.]+)"/g)].map((m) => Number(m[1]))
+  assert.equal(legs.length, 3, 'one path per leg, each carrying its own opacity')
+  assert.deepEqual([...legs].sort((x, y) => y - x), legs, 'and they only ever get fainter')
+  assert.ok(legs[0] !== undefined && legs[0] > 0.8)
+
+  const rings = [...svg.matchAll(/stroke-opacity="([\d.]+)"/g)].map((m) => Number(m[1]))
+  assert.equal(rings.length, 3, 'every stop but the first, which is solid coral')
+  assert.deepEqual([...rings].sort((x, y) => y - x), rings)
+  // The last stop is later, not less important: it stays legible.
+  assert.equal(rings.at(-1), 0.4)
+})
+
+test('the map fades the same way the drawing does', () => {
+  // The two have to agree: one of them is what prints.
+  assert.ok(MAP_JS.includes("'line-gradient'"), 'a true gradient along the line')
+  assert.ok(MAP_JS.includes('lineMetrics: true'), 'which line-gradient needs to paint at all')
+  assert.ok(MAP_JS.includes("'circle-stroke-opacity'"))
+  assert.ok(MAP_JS.includes("t: index / (route.length - 1)"), 'how far through the day each stop is')
+})

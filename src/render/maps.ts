@@ -30,6 +30,9 @@ export const MAP_JS = `
   var LIB = 'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl';
   var CORAL = '#E2574C';
   var PAPER = '#FBFAF7';
+  /* Same coral, as a gradient stop can state it: alpha has to travel with the
+     colour, because line-gradient replaces line-color rather than tinting it. */
+  var CORAL_RGB = '226, 87, 76';
   var loading = null;
 
   /* Load the library once, and only on a page that has a route to show. */
@@ -88,6 +91,9 @@ export const MAP_JS = `
 
       map.addSource('route', {
         type: 'geojson',
+        /* Required by line-gradient: without it the line has no notion of how
+           far along itself any point is, and the layer refuses to paint. */
+        lineMetrics: true,
         data: {
           type: 'Feature',
           properties: {},
@@ -99,7 +105,16 @@ export const MAP_JS = `
         type: 'line',
         source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': CORAL, 'line-width': 3.5, 'line-opacity': 0.9 }
+        paint: {
+          'line-width': 3.5,
+          /* Fades along the line itself rather than in steps per leg, so a day
+             of twelve short hops reads as one continuous direction. */
+          'line-gradient': [
+            'interpolate', ['linear'], ['line-progress'],
+            0, 'rgba(' + CORAL_RGB + ', 0.95)',
+            1, 'rgba(' + CORAL_RGB + ', 0.3)'
+          ]
+        }
       });
 
       map.addSource('stops', {
@@ -109,7 +124,8 @@ export const MAP_JS = `
           features: route.map(function (point, index) {
             return {
               type: 'Feature',
-              properties: { first: index === 0 },
+              /* How far through the day this stop is, 0 to 1. */
+              properties: { first: index === 0, t: index / (route.length - 1) },
               geometry: { type: 'Point', coordinates: point }
             };
           })
@@ -122,8 +138,15 @@ export const MAP_JS = `
         paint: {
           'circle-radius': ['case', ['get', 'first'], 6.5, 5],
           'circle-color': ['case', ['get', 'first'], CORAL, PAPER],
+          /* The fill stays opaque. It is what knocks the line out from under
+             the dot, and a translucent one lets the route show through the
+             stop, which reads as a smudge rather than a later stop. The ring
+             is the coral part, so the ring is what carries the fading. */
           'circle-stroke-color': CORAL,
-          'circle-stroke-width': 2.5
+          'circle-stroke-width': 2.5,
+          'circle-stroke-opacity': [
+            'interpolate', ['linear'], ['get', 't'], 0, 1, 1, 0.4
+          ]
         }
       });
 
