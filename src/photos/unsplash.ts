@@ -49,6 +49,8 @@ export interface Candidate {
   coords?: Coordinates
   /** What the photographer said about where it was taken. */
   where?: string
+  /** The photographer's own tags. Evidence about the picture, not the query. */
+  tags?: string[]
   downloadLocation: string
 }
 
@@ -70,6 +72,7 @@ interface RawPhoto {
     city?: unknown
     position?: { latitude?: unknown; longitude?: unknown }
   }
+  tags?: Array<{ title?: unknown }>
 }
 
 function toCandidate(raw: RawPhoto): Candidate | null {
@@ -95,6 +98,9 @@ function toCandidate(raw: RawPhoto): Candidate | null {
   const where = [raw.location?.name, raw.location?.city]
     .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
     .join(', ')
+  const tags = (raw.tags ?? [])
+    .map((t) => t?.title)
+    .filter((t): t is string => typeof t === 'string')
   const description =
     (typeof raw.description === 'string' && raw.description) ||
     (typeof raw.alt_description === 'string' && raw.alt_description) ||
@@ -112,20 +118,42 @@ function toCandidate(raw: RawPhoto): Candidate | null {
       ? { coords: { lat, lon } }
       : {}),
     ...(where ? { where } : {}),
+    ...(tags.length > 0 ? { tags } : {}),
     downloadLocation: download,
   }
 }
 
-/** Search, most relevant first. Never throws: no photograph is a fine answer. */
+/**
+ * Thrown when the hour's requests are gone.
+ *
+ * Distinct from finding nothing, and the distinction is the point: an empty
+ * result is a fine answer and being out of budget is not. Swallowing it
+ * printed "0 photographs" over a trip whose pictures were simply never asked
+ * for, which is the least useful thing a tool can say.
+ */
+export class RateLimited extends Error {
+  constructor() {
+    super('Unsplash rate limit reached — the Demo tier allows 50 requests an hour. Try again later.')
+    this.name = 'RateLimited'
+  }
+}
+
+/** Search, most relevant first. Empty is a fine answer; out of budget is not. */
 export async function search(query: string, opts: UnsplashOptions, perPage = 8): Promise<Candidate[]> {
   const doFetch = opts.fetchImpl ?? fetch
   const url = `${API}/search/photos?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape`
+  let res: Response
   try {
-    const res = await doFetch(url, {
+    res = await doFetch(url, {
       headers: { Authorization: `Client-ID ${opts.accessKey}`, 'Accept-Version': 'v1' },
       ...(opts.signal ? { signal: opts.signal } : {}),
     })
-    if (!res.ok) return []
+  } catch {
+    return []
+  }
+  if (res.status === 403 && res.headers?.get('x-ratelimit-remaining') === '0') throw new RateLimited()
+  if (!res.ok) return []
+  try {
     const body = (await res.json()) as { results?: RawPhoto[] }
     return (body.results ?? []).map(toCandidate).filter((c): c is Candidate => c !== null)
   } catch {

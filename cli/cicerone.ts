@@ -335,10 +335,19 @@ async function main(): Promise<void> {
     const saved = await store.getTrip(id)
     if (!saved) die(`No trip ${id}.`)
 
-    const found = await illustrate(withLegs(saved.graph), {
-      accessKey: process.env['UNSPLASH_ACCESS_KEY'] as string,
-      onProgress: (done, total) => process.stderr.write(`\r  ${done}/${total}`),
-    })
+    let found
+    try {
+      found = await illustrate(withLegs(saved.graph), {
+        accessKey: process.env['UNSPLASH_ACCESS_KEY'] as string,
+        onProgress: (done, total) => process.stderr.write(`\r  ${done}/${total}`),
+      })
+    } catch (err) {
+      process.stderr.write('\r')
+      // Being out of budget is not the same as finding nothing, and saying
+      // "0 photographs" for it is the least useful thing this could do.
+      if ((err as Error).name === 'RateLimited') die((err as Error).message)
+      throw err
+    }
     process.stderr.write('\r')
     for (const photo of found) await store.savePhoto(id, photo)
 

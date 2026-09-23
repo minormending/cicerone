@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { choose, describe, search, vouchedFor, type Candidate } from '../src/photos/unsplash.ts'
-import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
+import { cityFrom, distinctiveWords, illustrate, photoNames, spreadOver } from '../src/photos/illustrate.ts'
 import type { Trip } from '../src/domain/types.ts'
 
 const PRAGUE = { lat: 50.0875, lon: 14.4213 }
@@ -100,6 +100,84 @@ test('the city is guessed from the trip title', () => {
   assert.equal(cityFrom({ id: 't', title: '5 days in Prague', places: [], legs: [] } as Trip), 'Prague')
 })
 
+test('a city name is not a distinctive word', () => {
+  // A photograph tagged "prague" says nothing about which stop it is, and the
+  // boilerplate Wanderlog inherits from Google listings says less.
+  assert.deepEqual(distinctiveWords('Prague Astronomical Clock'), ['astronomical', 'clock'])
+  assert.deepEqual(distinctiveWords('National Gallery Prague – Schwarzenberg Palace'), ['schwarzenberg', 'palace'])
+  assert.deepEqual(distinctiveWords('Prague'), [])
+})
+
+test("a photograph is of a stop only when its own words say so", () => {
+  // Unsplash returns the same Charles Bridge picture for "Loreta Prague" and
+  // "Mr. Banh Mi Prague", so rank and result count carry no information. The
+  // photographer's description and tags are the only evidence about the
+  // picture rather than about the query.
+  const bridge = candidate('a', { description: 'Charles Bridge at golden hour', tags: ['prague', 'bridge'] })
+  assert.equal(photoNames(bridge, 'Charles Bridge'), true)
+  assert.equal(photoNames(bridge, 'Loreta'), false)
+  assert.equal(photoNames(bridge, 'Mr. Banh Mi'), false)
+
+  const tagged = candidate('b', { tags: ['astronomical', 'clock', 'old town'] })
+  assert.equal(photoNames(tagged, 'Prague Astronomical Clock'), true)
+
+  // Nothing distinctive to look for means no match, not a free pass.
+  assert.equal(photoNames(bridge, 'Prague'), false)
+})
+
+test('atmosphere pictures are spread through a chapter, not stacked at the top', () => {
+  const stops = Array.from({ length: 14 }, (_, i) => ({
+    id: `p${i}`,
+    name: `Stop ${i}`,
+    coords: PRAGUE,
+    dayIndex: 1,
+  }))
+  const picked = spreadOver(stops, 3)
+  assert.deepEqual(picked.map((p) => p.id), ['p0', 'p4', 'p9'])
+  // Fewer stops than pictures is not an error.
+  assert.equal(spreadOver(stops.slice(0, 2), 3).length, 2)
+  assert.deepEqual(spreadOver([], 3), [])
+})
+
+test('being out of budget is not the same as finding nothing', async () => {
+  // Swallowing this printed "0 photographs" over a trip whose pictures were
+  // simply never asked for.
+  const limited = (async () => ({
+    ok: false,
+    status: 403,
+    headers: { get: (h: string) => (h === 'x-ratelimit-remaining' ? '0' : null) },
+    json: async () => ({}),
+  })) as unknown as typeof fetch
+  await assert.rejects(() => search('Prague', { accessKey: 'k', fetchImpl: limited }), /rate limit/i)
+})
+
+test('one search covers the trip, with a hard ceiling on the rest', async () => {
+  // Thirty-three searches plus a download each is about forty-eight requests
+  // against a budget of fifty an hour: one trip consumed the whole hour and
+  // the next run returned nothing at all.
+  const trip: Trip = {
+    id: 't',
+    title: 'Trip to Prague',
+    places: Array.from({ length: 20 }, (_, i) => ({
+      id: `p${i}`,
+      name: `Distinctive Placename ${'x'.repeat(i + 4)}`,
+      coords: PRAGUE,
+      dayIndex: (i % 4) + 1,
+    })),
+    legs: [],
+  }
+  let searches = 0
+  await illustrate(trip, {
+    accessKey: 'k',
+    searchBudget: 6,
+    fetchImpl: (async (url: string) => {
+      if (String(url).includes('search/photos')) searches++
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ results: [] }) }
+    }) as unknown as typeof fetch,
+  })
+  assert.equal(searches, 7, 'one for the city, six targeted, and no more')
+})
+
 test('one opener per day, of the city, and never the same one twice', async () => {
   // Searching the day's first stop returned nothing on four of five days of a
   // real trip: it is a bakery, an airport and a supermarket. The city always
@@ -123,12 +201,10 @@ test('one opener per day, of the city, and never the same one twice', async () =
       return { ok: true, json: async () => ({ results: [photo('one'), photo('two')] }) }
     }) as unknown as typeof fetch,
   })
-  assert.equal(photos.length, 2, 'one per day, not one per stop')
-  assert.deepEqual(photos.map((p) => p.subject.id), ['a', 'c'])
-  assert.deepEqual(photos.map((p) => p.unsplashId), ['one', 'two'], 'a different picture each day')
+  assert.ok(photos.length >= 2, 'at least one per day')
   assert.ok(photos.every((p) => p.claim === 'atmosphere'))
-  assert.equal(queries.filter((q) => q.includes('search/photos')).length, 1, 'one search for the trip')
-  assert.ok(queries[0]?.includes('Prague'))
+  assert.equal(new Set(photos.map((p) => p.unsplashId)).size, photos.length, 'never the same picture twice')
+  assert.ok(queries.some((q) => q.includes('Prague')))
 })
 
 test("the traveller's own photograph outranks anything we could find", async () => {
