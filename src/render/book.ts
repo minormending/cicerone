@@ -104,6 +104,22 @@ export function dateRange(trip: Trip, days: number): string {
 }
 
 /**
+ * A row of counts.
+ *
+ * Pluralised, because "1 Corridors" is the sort of thing that makes a reader
+ * stop trusting the careful parts of a page. The day version is dropped
+ * altogether where there is only one stop: a summary of a single thing is not
+ * a summary, it is furniture. Day one of this trip is an airport and an
+ * overnight flight, and it carried "1 Stops / 0 Corridors" under its own
+ * chapter heading, which says nothing twice.
+ */
+function figures(cells: Array<{ n: number; one: string; many: string }>): string {
+  const cell = ({ n, one, many }: { n: number; one: string; many: string }) =>
+    `<div><div class="figure-n">${n}</div><div class="figure-l">${escapeHtml(n === 1 ? one : many)}</div></div>`
+  return `<div class="figures">\n${cells.map(cell).join('\n')}\n</div>`
+}
+
+/**
  * The front of the book.
  *
  * It opened on "Day One" with no cover, which is the one thing every printed
@@ -122,8 +138,6 @@ function titlePage(
   counts: { days: number; stops: number; corridors: number; claims: number },
 ): string {
   const when = dateRange(trip, counts.days)
-  const figure = (n: number, label: string) =>
-    `<div><div class="figure-n">${n}</div><div class="figure-l">${escapeHtml(label)}</div></div>`
 
   return `<header class="title-page">
 <div class="label accent">${escapeHtml(when || trip.title)}</div>
@@ -131,12 +145,12 @@ function titlePage(
 <p class="title-lead">${counts.stops} stops over ${counts.days} day${
     counts.days === 1 ? '' : 's'
   }, and the ground in between &mdash; which is the half nobody writes about.</p>
-<div class="figures">
-${figure(counts.days, counts.days === 1 ? 'Day' : 'Days')}
-${figure(counts.stops, 'Stops')}
-${figure(counts.corridors, 'Corridors')}
-${figure(counts.claims, counts.claims === 1 ? 'Checked claim' : 'Checked claims')}
-</div>
+${figures([
+    { n: counts.days, one: 'Day', many: 'Days' },
+    { n: counts.stops, one: 'Stop', many: 'Stops' },
+    { n: counts.corridors, one: 'Corridor', many: 'Corridors' },
+    { n: counts.claims, one: 'Checked claim', many: 'Checked claims' },
+  ])}
 </header>`
 }
 
@@ -704,10 +718,14 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
         ? paragraphs(chapter.body, [], 0).replace(/<\/?p>/g, '')
         : `${stops.length} stop${stops.length === 1 ? '' : 's'}${walked > 0 ? `, ${walked} of them joined on foot` : ''}.`
     }</p>
-<div class="figures">
-<div><div class="figure-n">${stops.length}</div><div class="figure-l">Stops</div></div>
-<div><div class="figure-n">${corridors.length}</div><div class="figure-l">Corridors</div></div>
-</div>
+${
+      stops.length > 1
+        ? figures([
+            { n: stops.length, one: 'Stop', many: 'Stops' },
+            { n: corridors.length, one: 'Corridor', many: 'Corridors' },
+          ])
+        : ''
+    }
 </div>
 ${figure(chapterPhoto, undefined, city)}
 ${route(stops)}

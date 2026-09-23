@@ -547,3 +547,36 @@ test('the title page owns page one when it prints', () => {
   // for the rule and not the string.
   assert.doesNotMatch(print, /\.day:first-child \{/)
 })
+
+test('a day with one stop has nothing to summarise', () => {
+  // Day one of a trip is often an airport and an overnight flight. It was
+  // carrying "1 Stops / 0 Corridors" under its own chapter heading, which
+  // says nothing twice and gets the plural wrong doing it.
+  const alone: Trip = { ...TRIP, places: [TRIP.places[0] as Place] }
+  const html = renderBook(alone, guide([passage()]), { corridors: [] })
+  // Slice from the chapter onward: the cover has its own counts and they are
+  // not what this is about. An earlier version of this test cut to a marker
+  // that was not there, sliced an empty string, and passed against anything.
+  const day = html.slice(html.indexOf('<section class="day"'))
+  assert.ok(day.length > 200, 'the day rendered at all')
+  assert.doesNotMatch(day, /figure-l/, 'no counts on a one-stop day')
+})
+
+test('a day with more than one stop keeps its counts, correctly pluralised', () => {
+  // Two stops joined by one corridor: the old markup said "1 Corridors".
+  const html = renderBook(TRIP, guide([passage()]), { corridors: [CORRIDOR] })
+  const day = html.slice(html.indexOf('<section class="day"'))
+  assert.match(day, /figure-n">2<\/div><div class="figure-l">Stops</)
+  assert.match(day, /figure-n">1<\/div><div class="figure-l">Corridor</)
+  assert.doesNotMatch(day, /figure-l">Corridors</, 'one corridor is not Corridors')
+})
+
+test('the cover pluralises its counts too', () => {
+  // Same row, same helper: a one-day trip should not read "1 Days".
+  const oneDay: Trip = { ...TRIP, places: [TRIP.places[0] as Place] }
+  const html = renderBook(oneDay, guide([passage()]), { corridors: [] })
+  const front = html.slice(0, html.indexOf('<section class="day"'))
+  assert.match(front, /figure-n">1<\/div><div class="figure-l">Day</)
+  assert.match(front, /figure-n">1<\/div><div class="figure-l">Stop</)
+  assert.doesNotMatch(front, /figure-l">Days</)
+})
