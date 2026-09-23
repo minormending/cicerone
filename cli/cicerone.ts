@@ -19,6 +19,7 @@
  *   cicerone import <key>         fetch a Wanderlog trip and store it
  *   cicerone photos <id>          find and store a photograph per subject
  *   cicerone book <id> [out]      render the guide as one standalone file
+ *   cicerone sources <id> [out]   what Wanderlog already cites about each stop
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -31,6 +32,7 @@ import { lightPassages } from '../src/light/light.ts'
 import { Store } from '../src/backend/store.ts'
 import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
+import { researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
 import { escapeHtml, renderBook } from '../src/render/book.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
@@ -48,6 +50,7 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone import <wanderlog-key>  fetch a trip and store it
   cicerone photos <id>             find and store a photograph per subject
   cicerone book <id> [out.html]    render the guide as one standalone file
+  cicerone sources <id> [out.json] what Wanderlog already cites about each stop
 
 Read from .env in the project root, or from the environment:
   PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY   the project
@@ -416,6 +419,39 @@ async function main(): Promise<void> {
 
     const named = found.filter((p) => p.claim === 'named').length
     console.log(`${found.length} photographs · ${named} can be captioned by name, ${found.length - named} as atmosphere`)
+    return
+  }
+
+  if (command === 'sources') {
+    const id = rest[0]
+    if (!id) die('cicerone sources <id> [out.json]')
+    const store = await connect()
+    const saved = await store.getTrip(id)
+    if (!saved) die(`No trip ${id}.`)
+
+    const research = await researchTrip(saved.graph.places, {
+      onProgress: (d, t, withSources) => process.stderr.write(`\r  ${d}/${t}, ${withSources} with sources`),
+    })
+    process.stderr.write('\r')
+
+    const byId = new Map(saved.graph.places.map((p) => [p.id, p]))
+    const out = rest[1] ?? 'sources.json'
+    writeFileSync(
+      out,
+      JSON.stringify(
+        [...research.entries()].map(([placeId, r]) => ({
+          place: placeId,
+          name: byId.get(placeId)?.name ?? r.name,
+          dishes: r.dishes,
+          sources: r.sources,
+        })),
+        null,
+        2,
+      ),
+      'utf8',
+    )
+    const total = [...research.values()].reduce((n, r) => n + r.sources.length, 0)
+    console.log(`${out} — ${research.size} stops, ${total} sourced snippets`)
     return
   }
 

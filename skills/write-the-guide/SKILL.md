@@ -18,6 +18,7 @@ between the fourth stop and the fifth.
 ```bash
 npm run cicerone pending                         # trips waiting
 npm run --silent cicerone trip ID > trip.json    # the graph and its corridors
+npm run cicerone sources ID sources.json         # what is already cited about each stop
 # ... research and write passages.json ...
 npm run --silent cicerone check --trip trip.json passages.json   # offline, as often as you like
 npm run cicerone save ID passages.json           # checks, then writes
@@ -32,6 +33,25 @@ banner into your file and the next command cannot parse it.
 
 `trip` gives you every stop and every corridor, and tells you which kinds each
 corridor can take. Work through it subject by subject. Save once, at the end.
+
+**Read `sources.json` before you search the web.** Wanderlog has already
+gathered what publishers have written about each stop, as a URL plus the actual
+sentence — Lonely Planet, National Geographic, local food writers. On a Prague
+trip that is a thousand snippets across twenty-four stops, and each one is
+already the shape a claim needs: the snippet is your `support`, the URL is your
+`source`. Start there and search the web for what it does not cover.
+
+Its distribution tells you something too. Charles Bridge has three hundred
+snippets and the hotel has none, which is a fair first guess at where there is
+something to say.
+
+Two cautions. The snippets are *evidence*, not prose — quoting them into a
+passage is copying somebody else's writing, and the job is to write your own
+sentence and cite theirs. And `sources.json` deliberately excludes Wanderlog's
+own review summaries and tips, which are written by a model: citing those would
+launder generated text through a citation, which is the exact failure the claim
+system exists to prevent. If you find yourself wanting them, that is the
+feeling of having nothing to say.
 
 ## What a passage is
 

@@ -24,6 +24,9 @@ export interface Place {
   /** IANA zone. Without it, times are estimated from longitude and said to be. */
   timezone?: string
   countryCode?: string
+  /** Google's id for this place, as the import carries it. The key to
+   *  everything Wanderlog already knows about the stop. */
+  placeId?: string
   /** What the traveller wrote against the stop. Theirs, never edited. */
   note?: string
   /** A photo they attached, which outranks anything we could find. */

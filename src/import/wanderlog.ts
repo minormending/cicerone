@@ -209,6 +209,7 @@ interface Extracted {
   time?: string
   /** The mode Wanderlog states for arriving here. Almost always absent. */
   travelMode?: TransportMode
+  placeId?: string
 }
 
 /** A section is an object carrying a heading; days and buckets both.
@@ -308,6 +309,8 @@ function collectPlaces(
         if (time) extracted.time = time
         const stated = travelModeFrom(node)
         if (stated) extracted.travelMode = stated
+        const placeId = candidate['place_id']
+        if (typeof placeId === 'string' && placeId) extracted.placeId = placeId
         out.push(extracted)
       } else {
         // Named but unplaceable. Recorded rather than dropped in silence,
@@ -408,6 +411,7 @@ export function tripFromWanderlog(
       // Carried on the place because a leg is derived from the pair, and the
       // mode the document states belongs to arriving *here*.
       if (entry.travelMode) place.arriveBy = entry.travelMode
+      if (entry.placeId) place.placeId = entry.placeId
       if (entry.region) {
         place.countryCode = entry.region
         if (entry.correctedFrom) {
