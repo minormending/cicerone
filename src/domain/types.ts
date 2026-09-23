@@ -108,6 +108,7 @@ export const PASSAGE_KINDS = [
   'event',
   'table',
   'craft',
+  'nearby',
   'look_for',
   'passing',
   'prepare',
@@ -121,6 +122,10 @@ export const KIND_SUBJECTS: Record<PassageKind, ReadonlyArray<Subject['kind']>> 
   event: ['place', 'corridor'],
   table: ['place'],
   craft: ['place'],
+  // What is around a stop that the itinerary does not include. A hotel has
+  // nothing to say about itself and a great deal to say about its street,
+  // and there was no kind for that until a hotel needed one.
+  nearby: ['place'],
   look_for: ['place', 'corridor'],
   passing: ['corridor'],
   prepare: ['corridor'],

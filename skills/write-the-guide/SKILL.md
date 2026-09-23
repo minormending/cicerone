@@ -86,9 +86,15 @@ citation checkable rather than decorative, and `check` enforces it.
 | `event` | both | What happened here |
 | `table` | place | Food and drink: what is different here, and *why* it is different |
 | `craft` | place | What was and is made here, and why this valley and not the next one |
+| `nearby` | place | What is round the corner that the itinerary leaves out |
 | `look_for` | both | What to actually notice |
 | `passing` | corridor | What you go past without being told — **the signature kind** |
 | `prepare` | corridor | For a corridor with nothing to see: what to bring, load, expect |
+
+`nearby` exists because a hotel has nothing to say about itself and a great
+deal to say about its street. Use it wherever a stop is a base rather than a
+destination — and note that `look_for` is already taken on every place by the
+computed light passage, so this is the kind for "what else is here".
 
 Do not write `look_for` passages about light, angles or golden hour. Those are
 computed from latitude, longitude and date and added automatically. Writing

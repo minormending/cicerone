@@ -98,6 +98,7 @@ const KIND_LABEL: Record<Passage['kind'], string> = {
   event: 'What happened here',
   table: 'At the table',
   craft: 'Made here',
+  nearby: 'Just round the corner',
   look_for: 'Look for',
   passing: 'Passing',
   prepare: 'Before you board',
