@@ -71,7 +71,7 @@ function byDay(trip: Trip): Map<number, Place[]> {
   return days
 }
 
-function dateOf(trip: Trip, dayIndex: number): string {
+export function dateOf(trip: Trip, dayIndex: number): string {
   if (!trip.departsOn) return ''
   const at = new Date(new Date(trip.departsOn).getTime() + (dayIndex - 1) * 86_400_000)
   return new Intl.DateTimeFormat('en-GB', {
@@ -386,6 +386,8 @@ const KIND_LABEL: Record<Passage['kind'], string> = {
   look_for: 'Look for',
   passing: 'Passing',
   prepare: 'Before you board',
+  // Never shown as a label: a chapter is the heading, not a passage under one.
+  chapter: 'The day',
 }
 
 /**
@@ -398,6 +400,8 @@ const KIND_LABEL: Record<Passage['kind'], string> = {
  * goes last for the same reason.
  */
 const KIND_ORDER: Record<Passage['kind'], number> = {
+  // Lifted out of the stop list entirely and rendered as the chapter head.
+  chapter: -1,
   origin: 0,
   event: 1,
   craft: 2,
@@ -618,6 +622,16 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
     if (written.length === 0 || !researched) continue
 
     const walked = corridors.filter((c) => c.mode === 'walk').length
+    /*
+     * The chapter, if somebody wrote one.
+     *
+     * Its title is the heading and its body is the line under it. Without one
+     * both fall back to what they always were — the first and last stop, and
+     * a count — which is the honest answer for a day nobody has named yet.
+     */
+    const chapter = guide.passages.find(
+      (p) => p.subject.kind === 'day' && p.subject.id === String(dayIndex) && p.kind === 'chapter',
+    )
     chapters.push(`<section class="day">
 <div class="day-head">
 <div class="label">Day ${escapeHtml(ORDINALS[dayIndex] ?? String(dayIndex))}${
@@ -625,9 +639,13 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
     }</div>
 <div class="label">${escapeHtml(city)}</div>
 </div>
-<h1>${escapeHtml(dayTitle(stops, city))}</h1>
+<h1>${escapeHtml(chapter?.title.trim() || dayTitle(stops, city))}</h1>
 <div class="day-lead">
-<p>${stops.length} stop${stops.length === 1 ? '' : 's'}${walked > 0 ? `, ${walked} of them joined on foot` : ''}.</p>
+<p>${
+      chapter
+        ? paragraphs(chapter.body, [], 0).replace(/<\/?p>/g, '')
+        : `${stops.length} stop${stops.length === 1 ? '' : 's'}${walked > 0 ? `, ${walked} of them joined on foot` : ''}.`
+    }</p>
 <div class="figures">
 <div><div class="figure-n">${stops.length}</div><div class="figure-l">Stops</div></div>
 <div><div class="figure-n">${corridors.length}</div><div class="figure-l">Corridors</div></div>

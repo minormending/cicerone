@@ -54,13 +54,23 @@ export function checkGuide(input: CheckInput): CheckResult {
 
   const placeIds = new Set(trip.places.filter((p) => p.dayIndex !== undefined).map((p) => p.id))
   const corridorIds = new Set(corridors.map((c) => c.id))
+  // A chapter's subject is the day index as a string, so a chapter can only
+  // be written for a day the trip actually has.
+  const dayIds = new Set(
+    trip.places.filter((p) => p.dayIndex !== undefined).map((p) => String(p.dayIndex)),
+  )
   const seen = new Set<string>()
 
   for (const passage of guide.passages) {
     const at = (rule: string, detail: string) => faults.push({ passageId: passage.id, rule, detail })
 
     // The subject exists, and is part of the journey.
-    const known = passage.subject.kind === 'place' ? placeIds : corridorIds
+    const known =
+      passage.subject.kind === 'place'
+        ? placeIds
+        : passage.subject.kind === 'day'
+          ? dayIds
+          : corridorIds
     if (!known.has(passage.subject.id)) {
       at('unknown-subject', `no ${passage.subject.kind} "${passage.subject.id}" on this trip`)
     }
@@ -138,7 +148,17 @@ export function checkGuide(input: CheckInput): CheckResult {
 }
 
 function coverageOf(trip: Trip, corridors: Corridor[], guide: Guide): Coverage {
-  const researched = guide.passages.filter((p) => !p.computed)
+  /*
+   * Chapters are not counted, in either direction.
+   *
+   * The substantiated share exists to catch a guide that wrote atmosphere
+   * where it should have done research. A chapter heading is neither: it is
+   * two sentences saying what a day is for, and it is navigation rather than
+   * a claim about the world. Counting it as unsubstantiated would push the
+   * routine to bolt a citation onto a heading to keep a number up, which is
+   * the exact behaviour the number was invented to discourage.
+   */
+  const researched = guide.passages.filter((p) => !p.computed && p.kind !== 'chapter')
   // Counted from researched passages only. Every place gets a computed light
   // passage, so counting those made a trip with one written stop report 33 of
   // 33 — a coverage number that could never fall below perfect.

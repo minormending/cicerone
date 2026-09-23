@@ -41,6 +41,10 @@ export const BOOK_CSS = `
   --verified: ${TOKENS.verified};
   --sans: Poppins, ui-sans-serif, system-ui, sans-serif;
   --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  /* The left rail beside a stop, and the gutter after it. Named because a
+     photograph has to reach back across both of them. */
+  --rail: 150px;
+  --rail-gap: 56px;
 }
 
 * { box-sizing: border-box; }
@@ -156,6 +160,25 @@ a:hover { color: #8F2C24; }
 /* ---- photography ---- */
 
 figure { margin: 44px 0 0; }
+/*
+ * A stop's photograph reaches back across the rail.
+ *
+ * Not beside the prose, which was the other option and is arithmetically out:
+ * the text column runs sixty-seven characters at twenty-point serif, and an
+ * image taking even a third of it drops that to forty-two. This book already
+ * made that mistake once, in two-column corridor prose that measured eighteen
+ * characters a line, and Czech proper nouns are not short.
+ *
+ * So the picture goes below — but full width rather than the width of the
+ * column. A photograph that stops short of the page's own edge reads as an
+ * inset, something dropped into the argument. Reaching back across the rail
+ * makes it a plate: a break in the reading, which is what it is for. It also
+ * matches the chapter openers, which have always run the full width.
+ *
+ * Direct child only. Dish thumbnails are figures too and live in their own
+ * grid, where a negative margin would shove them off the page.
+ */
+.entry-body > figure { margin-left: calc(-1 * (var(--rail) + var(--rail-gap))); }
 figure img { width: 100%; height: 300px; object-fit: cover; border-radius: 14px; display: block; background: #DCD9CF; }
 figcaption { display: flex; align-items: center; justify-content: space-between;
   gap: 16px; padding-top: 11px; font-family: var(--sans); font-size: 11px; color: var(--faint); }
@@ -168,8 +191,8 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
 
 /* ---- a place ---- */
 
-.entry { display: flex; gap: 56px; padding-top: 58px; }
-.entry-side { width: 150px; flex-shrink: 0; padding-top: 9px; }
+.entry { display: flex; gap: var(--rail-gap); padding-top: 58px; }
+.entry-side { width: var(--rail); flex-shrink: 0; padding-top: 9px; }
 .entry-when { font-family: var(--sans); font-size: 11px; color: var(--faint); padding-top: 9px; }
 .entry-body { flex-grow: 1; min-width: 0; }
 .entry h2 { margin: 0 0 18px; font-family: var(--sans); font-size: 30px;
@@ -257,6 +280,9 @@ body[data-claims='off'] .claim { display: none; }
   .wrap { padding: 0 20px 56px; }
   .day h1 { font-size: 30px; }
   .day-lead, .entry, .checked { flex-direction: column; gap: 18px; }
+  /* The rail is gone at this width, so there is nothing to reach back across
+     and the offset would push the picture off the left of the screen. */
+  .entry-body > figure { margin-left: 0; }
   .entry-side { width: auto; padding-top: 0; display: flex; align-items: baseline; gap: 12px; }
   .entry-when { padding-top: 0; }
   .entry h2 { font-size: 25px; }

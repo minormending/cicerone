@@ -472,3 +472,41 @@ test('nothing lays down a solid fill on paper', () => {
     assert.match(body, /background: none/, `${selector} clears its fill for paper`)
   }
 })
+
+test('a written chapter replaces the computed day heading', () => {
+  // "Antonínovo pekařství to Vinohradský Parlament" is a true sentence about a
+  // day spent in a castle, two galleries and an opera house, and it tells a
+  // reader nothing. Naming a day is a judgement, so it is written.
+  const chapter: Passage = {
+    id: 'c1',
+    subject: { kind: 'day', id: '1' },
+    kind: 'chapter',
+    title: 'The castle hill in the morning, Vinohrady after dark',
+    body: 'Two days inside one.',
+    claims: [],
+    sources: [],
+    writtenAt: '2026-09-23',
+  }
+  const html = renderBook(TRIP, guide([passage(), chapter]), { corridors: [CORRIDOR] })
+  assert.match(html, /<h1>The castle hill in the morning, Vinohrady after dark<\/h1>/)
+  assert.match(html, /Two days inside one\./)
+  assert.doesNotMatch(html, /<h1>[^<]*Šternberský[^<]*<\/h1>/, 'the stop-to-stop heading is gone')
+})
+
+test('a day nobody named still gets a heading', () => {
+  // Falling back to the first and last stop is the honest answer for a day
+  // with no chapter written, and it is what every day had until now.
+  const html = renderBook(TRIP, guide([passage()]), { corridors: [CORRIDOR] })
+  assert.match(html, /<h1>[^<]+<\/h1>/)
+  assert.match(html, /stops?/, 'and the count comes back as the lead')
+})
+
+test('a stop photograph reaches back across the rail, and stops on a phone', () => {
+  // Below the prose, not beside it: the text column runs 67 characters and an
+  // image taking a third of it drops that to 42. Below but full width, so it
+  // reads as a plate rather than an inset — and the offset has to be undone
+  // where there is no rail, or the picture leaves the screen.
+  assert.match(BOOK_CSS, /\.entry-body > figure \{ margin-left: calc\(-1 \* \(var\(--rail\) \+ var\(--rail-gap\)\)\); \}/)
+  const mobile = BOOK_CSS.slice(BOOK_CSS.indexOf('@media (max-width: 860px)'))
+  assert.match(mobile.slice(0, mobile.indexOf('@media print')), /\.entry-body > figure \{ margin-left: 0; \}/)
+})

@@ -99,7 +99,18 @@ export interface Corridor {
 
 /** What a passage is about. A corridor id is the corridor's, not the leg's. */
 export interface Subject {
-  kind: 'place' | 'corridor'
+  /**
+   * `day` carries the chapter itself: its id is the day index as a string.
+   *
+   * A chapter had no subject until now, so its heading was computed — the
+   * first stop's name, "to", the last stop's name. On a day that starts at a
+   * bakery and ends at a restaurant that reads "Antonínovo pekařství to
+   * Vinohradský Parlament", which is a true sentence about a day spent in a
+   * castle, two galleries and an opera house, and tells a reader nothing.
+   * Naming a day is a judgement about what the day is for, so it belongs
+   * where every other judgement in this book lives: written, and checked.
+   */
+  kind: 'place' | 'corridor' | 'day'
   id: string
 }
 
@@ -112,6 +123,7 @@ export const PASSAGE_KINDS = [
   'look_for',
   'passing',
   'prepare',
+  'chapter',
 ] as const
 
 export type PassageKind = (typeof PASSAGE_KINDS)[number]
@@ -127,6 +139,10 @@ export const KIND_SUBJECTS: Record<PassageKind, ReadonlyArray<Subject['kind']>> 
   // and there was no kind for that until a hotel needed one.
   nearby: ['place'],
   look_for: ['place', 'corridor'],
+  // The only kind that attaches to a day. Its title is the chapter heading
+  // and its body is the paragraph under it, which was previously a count of
+  // stops.
+  chapter: ['day'],
   passing: ['corridor'],
   // A corridor you cannot see out of, and also a place you are about to leave
   // from. An airport on the morning of a flight is exactly the subject this

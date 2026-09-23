@@ -35,7 +35,7 @@ import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import { imageUrl, researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
-import { escapeHtml, renderBook } from '../src/render/book.ts'
+import { dateOf, escapeHtml, renderBook } from '../src/render/book.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
 import { MAP_JS } from '../src/render/maps.ts'
 import { readSession, stillValid, TOKEN_PATH, writeSession, writeToken } from '../src/backend/session.ts'
@@ -170,6 +170,16 @@ function brief(trip: Trip) {
 
   return {
     trip: { id: withL.id, title: withL.title, departsOn: withL.departsOn },
+    // The days, so a chapter can be written for each. Nothing here is a title:
+    // that is the judgement being asked for.
+    days: [...new Set(withL.places.map((p) => p.dayIndex).filter((d): d is number => d !== undefined))]
+      .sort((a, b) => a - b)
+      .map((day) => ({
+        day,
+        date: dateOf(withL, day),
+        stops: withL.places.filter((p) => p.dayIndex === day).map((p) => p.name),
+        writable: ['chapter'],
+      })),
     places: withL.places
       .filter((p) => p.dayIndex !== undefined)
       .map((p) => ({

@@ -102,6 +102,8 @@ const KIND_LABEL: Record<Passage['kind'], string> = {
   look_for: 'Look for',
   passing: 'Passing',
   prepare: 'Before you board',
+  // Never shown as a label: a chapter is the heading, not a passage under one.
+  chapter: 'The day',
 }
 
 /** The fragment for the current position. Empty when there is nothing to say. */

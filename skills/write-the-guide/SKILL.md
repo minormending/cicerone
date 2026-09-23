@@ -165,6 +165,21 @@ citation checkable rather than decorative, and `check` enforces it.
 | `look_for` | both | What to actually notice |
 | `passing` | corridor | What you go past without being told — **the signature kind** |
 | `prepare` | both | What to bring, load or expect — an enclosed corridor, or a place you are about to leave from |
+| `chapter` | day | What this day is for. Its title is the chapter heading; its body is the paragraph under it |
+
+**Name every day.** `trip.json` lists the days with their stops; write one
+`chapter` for each, with the subject `{ "kind": "day", "id": "3" }`. Without
+one the heading is computed from the first and last stop — "Antonínovo
+pekařství to Vinohradský Parlament" for a day spent in a castle, two galleries
+and an opera house. True, and no use to anybody. Read the day's stops and its
+notes and say what the day is *for*: which half of the city it is in, what
+shape it has, what to brace for. Two or three sentences under it, and no
+count of stops — the reader can see the stops.
+
+Chapters are the one kind not counted in the sourced share, because a heading
+is navigation rather than a claim about the world. That is not licence to put
+a specific in one without holding it up: `check` applies the same rule here as
+everywhere else.
 
 `nearby` exists because a hotel has nothing to say about itself and a great
 deal to say about its street. Use it wherever a stop is a base rather than a
