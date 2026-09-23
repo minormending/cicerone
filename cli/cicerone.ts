@@ -18,8 +18,9 @@
  *   cicerone check <id> [file]    check without writing
  *   cicerone import <key>         fetch a Wanderlog trip and store it
  *   cicerone photos <id>          find and store a photograph per subject
+ *   cicerone book <id> [out]      render the guide as one standalone file
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 import { checkGuide, substantiatedShare, type CheckResult } from '../src/check.ts'
 import { corridorsOf } from '../src/corridor/waking.ts'
@@ -28,7 +29,9 @@ import { lightPassages } from '../src/light/light.ts'
 import { Store } from '../src/backend/store.ts'
 import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
-import { illustrate } from '../src/photos/illustrate.ts'
+import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
+import { escapeHtml, renderBook } from '../src/render/book.ts'
+import { BOOK_CSS } from '../src/render/styles.ts'
 import { readToken, TOKEN_PATH, writeToken } from '../src/backend/session.ts'
 import type { Coordinates, Corridor, Guide, Passage, TransportMode, Trip } from '../src/domain/types.ts'
 
@@ -42,6 +45,7 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone check --trip <trip.json> <passages.json>   check with no database
   cicerone import <wanderlog-key>  fetch a trip and store it
   cicerone photos <id>             find and store a photograph per subject
+  cicerone book <id> [out.html]    render the guide as one standalone file
 
 Environment:
   SUPABASE_URL, SUPABASE_ANON_KEY   the project
@@ -185,6 +189,36 @@ function readTripFile(parsed: unknown): { trip: Trip; corridors: Corridor[] } {
   if (!Array.isArray(graph?.places)) die('That file is neither a trip brief nor a trip graph.')
   const withL = withLegs(graph)
   return { trip: withL, corridors: corridorsOf(withL) }
+}
+
+const FONTS =
+  'https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&' +
+  'family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap'
+
+/**
+ * One self-contained file: stylesheet inlined, nothing to serve.
+ *
+ * The swap control is hidden, because there is nothing behind it outside the
+ * app — a button that does nothing is worse than no button.
+ */
+function page(title: string, body: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)} — Cicerone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="${FONTS}">
+<style>${BOOK_CSS}
+.swap { display: none; }</style>
+</head>
+<body data-claims="on">
+${body}
+</body>
+</html>
+`
 }
 
 /** A guide file is the passages the routine wrote; light is added here. */
@@ -353,6 +387,32 @@ async function main(): Promise<void> {
 
     const named = found.filter((p) => p.claim === 'named').length
     console.log(`${found.length} photographs · ${named} can be captioned by name, ${found.length - named} as atmosphere`)
+    return
+  }
+
+  if (command === 'book') {
+    const id = rest[0]
+    if (!id) die('cicerone book <id> [out.html]')
+    const store = await connect()
+    const saved = await store.getTrip(id)
+    if (!saved) die(`No trip ${id}.`)
+
+    const guide = await store.getGuide(id)
+    const withL = withLegs(saved.graph)
+    const city = cityFrom(withL)
+    const body = renderBook(withL, guide, {
+      corridors: corridorsOf(withL),
+      ...(city ? { city } : {}),
+    })
+
+    const out = rest[1] ?? `${saved.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.html`
+    writeFileSync(out, page(saved.title, body), 'utf8')
+    const count = (re: RegExp): number => (body.match(re) ?? []).length
+    console.log(
+      `${out} — ${count(/class="day"/g)} chapters · ${count(/class="entry"/g)} stops · ` +
+        `${count(/class="corridor"/g)} corridors · ${count(/<figure>/g)} photographs · ` +
+        `${count(/class="claim"/g)} claim marks`,
+    )
     return
   }
 

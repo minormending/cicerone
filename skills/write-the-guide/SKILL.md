@@ -21,7 +21,11 @@ npm run --silent cicerone trip ID > trip.json    # the graph and its corridors
 # ... research and write passages.json ...
 npm run --silent cicerone check --trip trip.json passages.json   # offline, as often as you like
 npm run cicerone save ID passages.json           # checks, then writes
+npm run cicerone book ID out.html                # read what you wrote
 ```
+
+Read the book back when you are done. Passages that are fine on their own can
+read badly in sequence, and the only way to find that is to read the chapter.
 
 Use `--silent` whenever you redirect output. Without it npm writes a two-line
 banner into your file and the next command cannot parse it.

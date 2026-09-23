@@ -1,13 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dayTitle, escapeHtml, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
+import { dayTitle, escapeHtml, mapPoints, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
 import type { Corridor, Guide, Passage, Photo, Place, Trip } from '../src/domain/types.ts'
 
+let nth = 0
 const place = (id: string, name: string, extra: Partial<Place> = {}): Place => ({
   id,
   name,
-  coords: { lat: 50.0875 + Number(id.length) / 1000, lon: 14.42 + Number(id.length) / 900 },
+  // Distinct per call: two stops at one coordinate have no shape to draw, and
+  // a fixture that gives them one hides that.
+  coords: { lat: 50.0875 + ++nth / 2000, lon: 14.42 + nth / 1500 },
   dayIndex: 1,
   ...extra,
 })
@@ -204,8 +207,39 @@ test('the route is drawn from the real coordinates', () => {
   assert.equal((svg.match(/<circle/g) ?? []).length, 3)
 })
 
-test('one stop draws no route', () => {
-  assert.equal(routeSvg([place('a', 'A')]), '')
+test('one stop draws no route, and neither do two in the same spot', () => {
+  const at = (id: string, lat: number, lon: number): Place => ({ id, name: id, coords: { lat, lon }, dayIndex: 1 })
+  assert.equal(routeSvg([at('a', 50.08, 14.42)]), '')
+  assert.equal(routeSvg([at('a', 50.08, 14.42), at('b', 50.08, 14.42)]), '')
+})
+
+test('the drawing keeps the shape of the day rather than filling the box', () => {
+  // Stretching each axis to fill a 10:1 frame turned every route into a
+  // horizontal line whatever it actually looked like.
+  const at = (id: string, lat: number, lon: number): Place => ({ id, name: id, coords: { lat, lon }, dayIndex: 1 })
+  // Three stops running due north: no east-west spread at all.
+  const svg = routeSvg([at('a', 50.080, 14.42), at('b', 50.085, 14.42), at('c', 50.090, 14.42)])
+  const xs = [...svg.matchAll(/cx="([\d.]+)"/g)].map((m) => Number(m[1]))
+  const ys = [...svg.matchAll(/cy="([\d.]+)"/g)].map((m) => Number(m[1]))
+  assert.equal(new Set(xs).size, 1, 'a north-south day draws as a vertical line')
+  assert.ok(Math.max(...ys) - Math.min(...ys) > 200, 'and uses the height it has')
+})
+
+test('a transfer is left off the map rather than flattening it', () => {
+  // Day two starts at an airport twelve kilometres away and spends the rest of
+  // itself inside one square kilometre. Fitting both put the airport at the
+  // far edge and squashed the whole day into a scribble.
+  const at = (id: string, lat: number, lon: number): Place => ({ id, name: id, coords: { lat, lon }, dayIndex: 1 })
+  const day = [
+    at('airport', 50.1018, 14.2632),
+    at('hotel', 50.0781, 14.4320),
+    at('square', 50.0876, 14.4212),
+    at('clock', 50.0870, 14.4207),
+  ]
+  assert.deepEqual(mapPoints(day).map((p) => p.id), ['hotel', 'square', 'clock'])
+  // And a day that genuinely is spread out keeps every stop.
+  const spread = [at('a', 50.0, 14.0), at('b', 51.0, 15.0), at('c', 52.0, 16.0)]
+  assert.equal(mapPoints(spread).length, 3)
 })
 
 test("the day's photograph opens the chapter, not the first stop", () => {

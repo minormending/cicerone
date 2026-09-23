@@ -109,11 +109,10 @@ a:hover { color: #8F2C24; }
 
 /* ---- the route, the one image we can always produce ---- */
 
-.route { background: var(--sand); border-radius: 14px; padding: 30px 36px 22px; margin-top: 40px; }
-.route svg { width: 100%; height: 96px; display: block; }
-.route-stops { display: flex; justify-content: space-between; padding-top: 10px; gap: 12px; }
-.route-stops span { font-family: var(--sans); font-size: 10px; font-weight: 500;
-  letter-spacing: 0.13em; color: var(--faint); text-transform: uppercase; }
+.route { background: var(--sand); border-radius: 14px; padding: 24px; margin-top: 40px; }
+/* No fixed height: the drawing keeps the day's own proportions, and forcing a
+   height would flatten it back into the line this replaced. */
+.route svg { width: 100%; height: auto; display: block; }
 
 /* ---- photography ---- */
 

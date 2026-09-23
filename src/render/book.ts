@@ -1,5 +1,5 @@
 import type { Corridor, Guide, Passage, Photo, Place, Subject, Trip } from '../domain/types.ts'
-import { minutesOfDay } from '../corridor/legs.ts'
+import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
 
 /**
  * The book.
@@ -128,44 +128,89 @@ function onThisDay(subject: Subject, stops: Place[], corridors: Corridor[]): boo
 }
 
 /**
+ * How far apart two stops can be and still belong on the same little map.
+ *
+ * A day that starts at an airport has one leg of twelve kilometres and
+ * thirteen of under two. Fitting all of it into one frame put the airport at
+ * the far left and squashed the entire rest of the day into a thumbnail-sized
+ * scribble on the right: a map of nothing, at the top of every chapter.
+ *
+ * So the map is of the day on foot. A stop whose nearest neighbour is further
+ * than this is a transfer rather than part of the shape, and it is left off.
+ */
+const MAP_MAX_GAP_METRES = 3_000
+
+/** The stops that make up the day's shape, without the transfers. */
+export function mapPoints(places: Place[]): Place[] {
+  if (places.length < 3) return places
+  const near = places.filter((p) =>
+    places.some((q) => q !== p && metresBetween(p.coords, q.coords) <= MAP_MAX_GAP_METRES),
+  )
+  // If nothing clusters, the day really is spread out and the map should say so.
+  return near.length >= 2 ? near : places
+}
+
+const MAP_W = 800
+const MAP_H = 300
+const MAP_PAD = 26
+
+/**
  * The route, drawn as a coral line.
  *
  * The one image that is about *this* trip rather than borrowed, and the only
- * one we can always produce. Coordinates are normalised into the viewBox, so
- * the shape is the day's actual shape rather than decoration.
+ * one we can always produce — so it has to be worth looking at.
+ *
+ * Projected at equal scale in both directions, with longitude compressed by
+ * the cosine of the latitude, so the drawing is the shape the day actually
+ * has. The first version stretched latitude and longitude independently to
+ * fill a 10:1 box, which turns every route into a horizontal line whatever it
+ * really looks like. A day that is genuinely linear should draw as a line; a
+ * day that loops should draw as a loop.
+ *
+ * There are no labels. They used to sit in an evenly spaced row beneath a
+ * geographically placed set of dots, so each name was under whichever dot
+ * happened to be above it, which was none of them. The stops are named in the
+ * chapter below in the order you visit them.
  */
-export function routeSvg(places: Place[], highlight?: number): string {
-  const points = places.map((p) => p.coords)
+export function routeSvg(places: Place[]): string {
+  const points = mapPoints(places).map((p) => p.coords)
   if (points.length < 2) return ''
 
-  const lats = points.map((p) => p.lat)
-  const lons = points.map((p) => p.lon)
-  const minLat = Math.min(...lats)
-  const maxLat = Math.max(...lats)
-  const minLon = Math.min(...lons)
-  const maxLon = Math.max(...lons)
-  const spanLat = maxLat - minLat || 1e-6
-  const spanLon = maxLon - minLon || 1e-6
+  const meanLat = points.reduce((n, p) => n + p.lat, 0) / points.length
+  const k = Math.cos((meanLat * Math.PI) / 180)
+  const raw = points.map((p) => ({ x: p.lon * k, y: -p.lat }))
 
-  const xy = points.map((p) => ({
-    x: 24 + ((p.lon - minLon) / spanLon) * 952,
-    // Latitude increases northward and SVG y increases downward.
-    y: 20 + (1 - (p.lat - minLat) / spanLat) * 56,
+  const xs = raw.map((p) => p.x)
+  const ys = raw.map((p) => p.y)
+  const spanX = Math.max(...xs) - Math.min(...xs)
+  const spanY = Math.max(...ys) - Math.min(...ys)
+  if (spanX === 0 && spanY === 0) return ''
+
+  // One scale for both axes: that is what makes it a shape rather than a graph.
+  const scale = Math.min(
+    spanX > 0 ? (MAP_W - MAP_PAD * 2) / spanX : Infinity,
+    spanY > 0 ? (MAP_H - MAP_PAD * 2) / spanY : Infinity,
+  )
+  const midX = (Math.max(...xs) + Math.min(...xs)) / 2
+  const midY = (Math.max(...ys) + Math.min(...ys)) / 2
+
+  const xy = raw.map((p) => ({
+    x: MAP_W / 2 + (p.x - midX) * scale,
+    y: MAP_H / 2 + (p.y - midY) * scale,
   }))
 
   const path = xy.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
   const dots = xy
-    .map(
-      (p, i) =>
-        `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${i === highlight ? 5.5 : 6.5}"` +
-        (i === highlight ? ' fill="var(--coral)" stroke="var(--coral)"' : '') +
-        '></circle>',
+    .map((p, i) =>
+      i === 0
+        ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="7" fill="var(--coral)" stroke="none"></circle>`
+        : `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5.5"></circle>`,
     )
     .join('')
 
-  return `<svg viewBox="0 0 1000 96" role="img" aria-label="The day's route, ${places.length} stops">
-<path d="${path}" fill="none" stroke="var(--coral)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
-<g fill="var(--paper)" stroke="var(--coral)" stroke-width="3">${dots}</g>
+  return `<svg viewBox="0 0 ${MAP_W} ${MAP_H}" role="img" aria-label="The shape of the day on foot, ${points.length} stops">
+<path d="${path}" fill="none" stroke="var(--coral)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path>
+<g fill="var(--paper)" stroke="var(--coral)" stroke-width="2.5">${dots}</g>
 </svg>`
 }
 
@@ -364,16 +409,7 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
 </div>
 </div>
 ${figure(chapterPhoto, undefined, city)}
-${
-      stops.length > 1
-        ? `<div class="route">${routeSvg(stops)}
-<div class="route-stops">${stops
-            .slice(0, 5)
-            .map((p) => `<span>${escapeHtml(shortName(p.name))}</span>`)
-            .join('')}</div>
-</div>`
-        : ''
-    }
+${routeSvg(stops) ? `<div class="route">${routeSvg(stops)}</div>` : ''}
 ${written.join('\n')}
 </section>`)
   }

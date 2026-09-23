@@ -65,6 +65,7 @@ npm run --silent cicerone trip ID > trip.json
 npm run --silent cicerone check --trip trip.json passages.json   # no database
 npm run cicerone save ID passages.json
 npm run cicerone photos ID
+npm run cicerone book ID prague.html             # one standalone file
 ```
 
 `--silent` matters wherever output is redirected: without it npm writes its own
