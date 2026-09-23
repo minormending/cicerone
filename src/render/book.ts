@@ -413,12 +413,32 @@ interface Numbered {
   offset: number
 }
 
+/**
+ * A passage, with the title it has always had and never shown.
+ *
+ * Every passage carries one, `check` refuses a passage without one, and the
+ * routine writes them with some care — "Order the deer", "The tower nobody
+ * looks up at", "The road they put through the middle of it". None of them
+ * had ever reached a reader: renderPassage took the body and dropped the
+ * title on the floor, so a stop with three passages arrived as eight hundred
+ * words of undifferentiated prose under one heading.
+ *
+ * Showing them is most of what this page needed. It separates the history
+ * from the practical without inventing any new furniture, it gives a long
+ * entry something to scan, and it makes the shape of the writing visible —
+ * which is the shape it was written in.
+ *
+ * Not on a computed passage. Those are one line of arithmetic about the sun
+ * and already carry their own footer; a heading over them would be three
+ * times the size of the thing it introduces.
+ */
 function renderPassage({ passage, offset }: Numbered): string {
   const body = paragraphs(passage.body, passage.claims, offset)
-  const computed = passage.computed
-    ? `<div class="computed">${SUN_ICON}<span>Computed from latitude, longitude and date &mdash; no source needed</span></div>`
-    : ''
-  return `${body}${computed}`
+  if (passage.computed) {
+    return `${body}<div class="computed">${SUN_ICON}<span>Computed from latitude, longitude and date &mdash; no source needed</span></div>`
+  }
+  const title = passage.title.trim()
+  return `${title ? `<h3 class="passage-title">${escapeHtml(title)}</h3>` : ''}${body}`
 }
 
 /**

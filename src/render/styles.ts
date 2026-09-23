@@ -121,6 +121,15 @@ a:hover { color: #8F2C24; }
 .route.has-map { padding: 10px; }
 .route .maplibregl-ctrl-attrib { font-family: var(--sans); font-size: 10px; }
 
+/* A passage's own heading. Sans, so it reads as structure rather than as a
+   louder sentence; well below the thirty-point stop name above it. */
+.passage-title {
+  font-family: var(--sans); font-size: 16px; font-weight: 600; line-height: 1.35;
+  letter-spacing: -0.005em; color: var(--ink); margin: 30px 0 12px;
+}
+.passage-title:first-child { margin-top: 0; }
+.corridor-body .passage-title { margin-top: 22px; }
+
 /* ---- the traveller's own note ---- */
 
 /* Coral rather than the sand the rest of the furniture uses. Sand is the
@@ -251,6 +260,7 @@ body[data-claims='off'] .claim { display: none; }
   .entry-side { width: auto; padding-top: 0; display: flex; align-items: baseline; gap: 12px; }
   .entry-when { padding-top: 0; }
   .entry h2 { font-size: 25px; }
+  .passage-title { font-size: 15px; }
   .entry p, .corridor-body p { font-size: 18px; }
   .figures { gap: 24px; flex-wrap: wrap; }
   .corridor { margin: 40px -20px 0; padding: 32px 20px 34px; }

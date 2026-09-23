@@ -435,3 +435,23 @@ test('the stylesheet survives being a string in a template literal', () => {
   const close = (BOOK_CSS.match(/}/g) ?? []).length
   assert.equal(open, close, 'every rule closes')
 })
+
+test('a passage shows the title it was written with', () => {
+  // Every passage carries one and `check` refuses a passage without one, and
+  // for the life of the renderer none of them reached a reader: a stop with
+  // three passages arrived as one undifferentiated block of prose.
+  const html = renderBook(TRIP, guide([passage({ title: 'The tower nobody looks up at' })]), { corridors: [CORRIDOR] })
+  assert.match(html, /<h3 class="passage-title">The tower nobody looks up at<\/h3>/)
+})
+
+test('a computed passage gets no heading', () => {
+  // One line of arithmetic about the sun. A heading over it would be three
+  // times the size of the thing it introduces.
+  // renderBook renders the guide it is handed; the CLI is what adds the light
+  // passages, so this one has to be put in by hand.
+  const light = passage({ id: 'p-light', kind: 'look_for', title: 'Light and angle', computed: true,
+    body: 'Low warm light 07:12\u201308:12, which is when you arrive.' })
+  const html = renderBook(TRIP, guide([passage(), light]), { corridors: [CORRIDOR] })
+  assert.match(html, /class="computed"/, 'the computed passage rendered')
+  assert.doesNotMatch(html, /passage-title">Light and angle/)
+})
