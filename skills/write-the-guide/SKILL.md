@@ -223,6 +223,24 @@ trip where eleven of thirty-three stops have real passages and the rest have
 none is a good guide. A trip where all thirty-three have four paragraphs is a
 bad one wearing a good one's clothes.
 
+**But this is a rule about evidence, not about length.** Where there is
+something to say, say all of it — long is better than short, and a reader
+standing in front of a cathedral is not well served by two paragraphs because
+you were being disciplined somewhere else. The test is never "is this short
+enough", it is "is every specific in it held up". Research further before you
+write less: a stop that looks thin usually means the search stopped early, and
+the famous ones are where thinness is least forgivable, because that is where
+the reader is standing longest.
+
+**Repetition across days is fine. Within a day it is not.** Nobody reads this
+book in one sitting; they read a chapter on the morning it applies to, so
+telling them on Saturday what you told them on Thursday is a service rather
+than a fault. Twice in the same chapter is the fault — four hours apart, two
+passages once landed on the same sentence about the same district, and the
+second one taught nobody anything. Where two passages on one day reach for the
+same material, give the better one the material and give the other one the
+thing only it can say.
+
 If you find yourself writing "this charming spot is perfect for", stop. You
 have run out of things to say and started producing texture.
 

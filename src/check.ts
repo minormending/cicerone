@@ -39,8 +39,53 @@ export interface CheckResult {
   coverage: Coverage
 }
 
-/** A specific claim looks like one: a year, a number, a proper noun with a date. */
-const SPECIFIC = /\b(1[0-9]{3}|20[0-9]{2})\b|\b\d+(\.\d+)?\s?(km|m|kg|metres|meters|years|centuries)\b/i
+/**
+ * What looks like a specific, and therefore needs something behind it.
+ *
+ * Three patterns, and one deliberate omission.
+ *
+ * A four-digit year. A digit with a unit after it. And — this is the part
+ * that was missing for the life of the checker — a span of time or a
+ * proportion written out in *words*. The regex only ever looked for digits,
+ * so "two hundred and fifty years", "two centuries" and "half of them are
+ * embassies now" all sailed through a gate the entire design rests on. Four
+ * of them were in a finished guide before anybody counted.
+ *
+ * The omission is distance. "Seven hundred metres south-east" opens a dozen
+ * corridors in that guide and not one of them is a claim about the world:
+ * the number is computed from two sets of coordinates in the itinerary, the
+ * same way the light passages are computed from latitude and date. Demanding
+ * a citation for it would teach the routine to cite a source for arithmetic,
+ * which is how a book ends up with decorative footnotes. Digits with a unit
+ * are still caught, so `1.7 hectares` and `53 metres below surface` — real
+ * measurements of the world — are held to the rule.
+ */
+const WORD_NUMBER =
+  'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand'
+
+const SPECIFIC = new RegExp(
+  [
+    // A year.
+    '\\b(1[0-9]{3}|20[0-9]{2})\\b',
+    // A measurement written with digits.
+    '\\b\\d+(\\.\\d+)?\\s?(km|m|kg|ha|hectares?|litres?|metres|meters|years|centuries)\\b',
+    // A span of time written out: "two centuries", "two hundred and fifty years".
+    // The trailing boundary is load-bearing: without it `nine` matches inside
+    // "nineteenth" and every "nineteenth-century" in the book is a fault.
+    `\\b(${WORD_NUMBER})\\b[\\w\\s-]{0,24}?\\b(years|centuries|century|decades)\\b`,
+    /*
+     * A proportion asserted about a population: "half of them are embassies",
+     * "a good half of the mains are beef".
+     *
+     * "of it" and "of that" are excluded on purpose. They point back at
+     * something the sentence just said — "almost all of it uphill" — rather
+     * than out at a countable set in the world, and only the second kind is
+     * a claim anybody could check.
+     */
+    '\\b(half|a third|two thirds|a quarter|three quarters|most|almost all|nearly all)\\s+of\\s+(the|them|these|those)\\b',
+  ].join('|'),
+  'i',
+)
 
 export interface CheckInput {
   trip: Trip

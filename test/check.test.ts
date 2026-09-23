@@ -253,3 +253,54 @@ test('a citation pointing at a page is left alone', () => {
     )
   }
 })
+
+test('a number written as a word is still a number', () => {
+  /*
+   * The regex only ever looked for digits, so every quantity spelled out
+   * walked straight through the one gate the whole design rests on. Four of
+   * them were sitting in a finished guide before anybody counted: a
+   * two-hundred-and-fifty-year instrument record, two centuries of nobility
+   * out-building each other, half a district being embassies, and half a
+   * restaurant's mains being beef — which is the one that would have cost
+   * somebody their dinner.
+   */
+  for (const body of [
+    'Somebody has read the instruments every day for two hundred and fifty years, without a gap.',
+    'The nobility spent two centuries out-building each other around the edges of it.',
+    'Half of them are embassies now, which is why the doorways have flags.',
+    'A good half of the mains are beef, including several that do not say so.',
+    'Most of these cruises turn into the side channel before they come back.',
+  ]) {
+    const result = checkGuide(input([passage({ body })]))
+    assert.ok(
+      result.faults.some((f) => f.rule === 'unsourced-specific'),
+      `should be caught: ${body}`,
+    )
+  }
+})
+
+test('a computed distance is not a claim about the world', () => {
+  /*
+   * A dozen corridors open on one of these. The number comes from two sets of
+   * coordinates in the itinerary, the same way a light passage comes from
+   * latitude and date, and demanding a citation for it would teach the
+   * routine to cite a source for arithmetic.
+   *
+   * The ordinals matter too: `nine` sits inside "nineteenth", and without a
+   * trailing word boundary every "nineteenth-century" in the book is a fault.
+   */
+  for (const body of [
+    'Seven hundred metres south-east, out of the oldest corner of the Old Town and into the rest.',
+    'Three kilometres across town, and the memorable part is underground at the start of it.',
+    'You are leaving the strip of grand nineteenth-century institutions and walking uphill.',
+    'Sixteenth-century nobles wanted to look as though they had quarried half a mountain here.',
+    'The morning is the hill, and almost all of it is uphill from where you are standing now.',
+  ]) {
+    const result = checkGuide(input([passage({ body })]))
+    assert.equal(
+      result.faults.some((f) => f.rule === 'unsourced-specific'),
+      false,
+      `should pass: ${body}`,
+    )
+  }
+})
