@@ -1,5 +1,4 @@
 import type { Coordinates, Photo, Subject } from '../domain/types.ts'
-import { metresBetween } from '../corridor/legs.ts'
 
 /**
  * Photographs, and how much their captions are allowed to claim.
@@ -10,27 +9,35 @@ import { metresBetween } from '../corridor/legs.ts'
  * the download endpoint whenever a photo is used. We pull through the API, so
  * we attribute, and `credit` is not optional on anything found here.
  *
- * The harder rule is about captions. A photograph captioned as a place is a
- * factual claim, and Unsplash matches on user-supplied tags and titles which
- * are frequently approximate and sometimes simply wrong. A confident caption
- * under a picture of the wrong park is the visual form of the confidently
- * wrong operational card the previous app was built to prevent.
+ * The rule about captions survived contact with the live API; the mechanism
+ * for it did not.
  *
- * So a photograph may be captioned by name only when its own coordinates put
- * it at the place. Everything else runs as atmosphere, captioned by city or
- * region, where being generic is honest rather than a hedge.
+ * The rule: a photograph captioned as a place is a factual claim, so a caption
+ * may only claim what can be checked. The mechanism was going to be
+ * coordinates — a picture earns a place's name when its own `position` puts it
+ * within 150 m. Across four searches of Prague landmarks, not one of thirty-two
+ * results carried coordinates at all. `position` is null on effectively
+ * everything, and a rule that never fires is not a strict rule but a dead one.
+ *
+ * The photographer's own `location.name` looked like the answer — "Charles
+ * bridge, Prague, Czechia" is a statement about where somebody stood rather
+ * than about what a picture is of. It is not enough either, and the reason is
+ * simpler than the matching: **nothing automatic gets to claim a name here.**
+ * A location string is still free text somebody typed, and the failure it
+ * would produce — a confident caption under a photograph of the wrong park —
+ * is exactly what the rule exists to prevent.
+ *
+ * So the settled design is smaller than the one it replaced. Anything found by
+ * searching is **atmosphere**, captioned by city, where being generic is
+ * honest. A name requires a person: either the traveller's own photograph, or
+ * one they picked in the swap dialog, having looked at it.
+ *
+ * `location` is still read, and shown to whoever is choosing. It is good
+ * evidence for a human and insufficient evidence for a machine, which is the
+ * whole distinction.
  */
 
 const API = 'https://api.unsplash.com'
-
-/**
- * How close a photograph's own coordinates must be to earn the place's name.
- *
- * Tight, because this is the whole verification. A hundred and fifty metres in
- * a city centre is the next building, and the next building is the failure
- * this rule exists to prevent.
- */
-export const NAMED_METRES = 150
 
 export interface Candidate {
   id: string
@@ -38,8 +45,10 @@ export interface Candidate {
   thumb: string
   description: string
   credit: { name: string; link: string }
-  /** Present on a minority of photographs, and the only thing that verifies one. */
+  /** Almost never present in practice. Verifies a photograph outright. */
   coords?: Coordinates
+  /** What the photographer said about where it was taken. */
+  where?: string
   downloadLocation: string
 }
 
@@ -56,7 +65,11 @@ interface RawPhoto {
   urls?: { regular?: unknown; small?: unknown }
   links?: { download_location?: unknown; html?: unknown }
   user?: { name?: unknown; links?: { html?: unknown } }
-  location?: { position?: { latitude?: unknown; longitude?: unknown } }
+  location?: {
+    name?: unknown
+    city?: unknown
+    position?: { latitude?: unknown; longitude?: unknown }
+  }
 }
 
 function toCandidate(raw: RawPhoto): Candidate | null {
@@ -79,6 +92,9 @@ function toCandidate(raw: RawPhoto): Candidate | null {
 
   const lat = raw.location?.position?.latitude
   const lon = raw.location?.position?.longitude
+  const where = [raw.location?.name, raw.location?.city]
+    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+    .join(', ')
   const description =
     (typeof raw.description === 'string' && raw.description) ||
     (typeof raw.alt_description === 'string' && raw.alt_description) ||
@@ -90,7 +106,12 @@ function toCandidate(raw: RawPhoto): Candidate | null {
     thumb,
     description,
     credit: { name, link: profile },
-    ...(typeof lat === 'number' && typeof lon === 'number' ? { coords: { lat, lon } } : {}),
+    // 0,0 comes back for a photograph with no location rather than null, and
+    // Null Island is not where anybody stood.
+    ...(typeof lat === 'number' && typeof lon === 'number' && (lat !== 0 || lon !== 0)
+      ? { coords: { lat, lon } }
+      : {}),
+    ...(where ? { where } : {}),
     downloadLocation: download,
   }
 }
@@ -131,14 +152,25 @@ export async function trackDownload(candidate: Candidate, opts: UnsplashOptions)
 }
 
 /**
- * Which of these, if any, has earned the place's own name.
+ * Everything the photograph itself says about where it was taken.
  *
- * Coordinates only. Not the title, not the tags, not the order Unsplash
- * returned them in — those are what put a photograph of the wrong park at the
- * top of the list in the first place.
+ * A separate request, because the search response omits `location` entirely.
+ * Called only for the photograph actually kept.
  */
-export function verifiedAt(candidates: Candidate[], at: Coordinates): Candidate | undefined {
-  return candidates.find((c) => c.coords && metresBetween(c.coords, at) <= NAMED_METRES)
+export async function describe(candidate: Candidate, opts: UnsplashOptions): Promise<Candidate> {
+  const doFetch = opts.fetchImpl ?? fetch
+  try {
+    const res = await doFetch(`${API}/photos/${encodeURIComponent(candidate.id)}`, {
+      headers: { Authorization: `Client-ID ${opts.accessKey}`, 'Accept-Version': 'v1' },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    })
+    if (!res.ok) return candidate
+    const full = toCandidate((await res.json()) as RawPhoto)
+    // The search result keeps its own urls; only the location is wanted here.
+    return full ? { ...candidate, ...(full.coords ? { coords: full.coords } : {}), ...(full.where ? { where: full.where } : {}) } : candidate
+  } catch {
+    return candidate
+  }
 }
 
 export interface ChosenPhoto {
@@ -147,19 +179,13 @@ export interface ChosenPhoto {
 }
 
 /**
- * The best photograph for a subject, and an honest caption for it.
+ * The most relevant photograph, captioned as atmosphere.
  *
- * Verified first; failing that the most relevant result, captioned as the
- * region rather than the place. `undefined` when there is nothing, which is
- * an ordinary outcome and not an error.
+ * `undefined` when there is nothing, which is an ordinary outcome and not an
+ * error — several stops on a real trip have no photograph anywhere.
  */
-export function choose(
-  subject: Subject,
-  candidates: Candidate[],
-  at: Coordinates | undefined,
-): ChosenPhoto | undefined {
-  const verified = at ? verifiedAt(candidates, at) : undefined
-  const candidate = verified ?? candidates[0]
+export function choose(subject: Subject, candidates: Candidate[]): ChosenPhoto | undefined {
+  const candidate = candidates[0]
   if (!candidate) return undefined
 
   return {
@@ -169,7 +195,8 @@ export function choose(
       unsplashId: candidate.id,
       url: candidate.url,
       credit: candidate.credit,
-      claim: verified ? 'named' : 'atmosphere',
+      // Always. Nothing found by searching gets to claim a name.
+      claim: 'atmosphere',
       chosenBy: 'auto',
     },
   }

@@ -11,6 +11,7 @@
  * Actions cron with the Agent SDK later is a runner swap, because the tools
  * it calls do not change.
  *
+ *   cicerone login <token>        save a session from the web app
  *   cicerone pending              trips with no guide, or one gone stale
  *   cicerone trip <id>            the trip graph and its corridors, as JSON
  *   cicerone save <id> <file>     check a guide, then write it
@@ -28,10 +29,12 @@ import { Store } from '../src/backend/store.ts'
 import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import { illustrate } from '../src/photos/illustrate.ts'
+import { readToken, TOKEN_PATH, writeToken } from '../src/backend/session.ts'
 import type { Guide, Passage, Trip } from '../src/domain/types.ts'
 
 const USAGE = `cicerone — the seam between the routine and the database
 
+  cicerone login <token>           save the token from the site, and check it
   cicerone pending                 trips with no guide, or one gone stale
   cicerone trip <id>               the trip graph and its corridors, as JSON
   cicerone save <id> <file.json>   check a guide, then write it
@@ -42,7 +45,7 @@ const USAGE = `cicerone — the seam between the routine and the database
 
 Environment:
   SUPABASE_URL, SUPABASE_ANON_KEY   the project
-  SUPABASE_REFRESH_TOKEN            your session, from the web app
+  SUPABASE_REFRESH_TOKEN            overrides the saved session, for CI
   UNSPLASH_ACCESS_KEY               for \`photos\` only
 `
 
@@ -54,9 +57,14 @@ function die(message: string, code = 1): never {
 async function connect(): Promise<Store> {
   const url = process.env['SUPABASE_URL']
   const anonKey = process.env['SUPABASE_ANON_KEY']
-  const refreshToken = process.env['SUPABASE_REFRESH_TOKEN']
-  if (!url || !anonKey || !refreshToken) {
-    die('Set SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_REFRESH_TOKEN.')
+  const refreshToken = readToken()
+  if (!url || !anonKey) die('Set SUPABASE_URL and SUPABASE_ANON_KEY.')
+  if (!refreshToken) {
+    die(
+      `No session. Sign in at the site, press "Copy token for the routine",\n` +
+        `then run:  npm run cicerone login <paste>\n\n` +
+        `Stored at ${TOKEN_PATH}.`,
+    )
   }
 
   const db = createClient(url, anonKey, {
@@ -66,8 +74,12 @@ async function connect(): Promise<Store> {
   const { data, error } = await db.auth.refreshSession({ refresh_token: refreshToken })
   if (error || !data.user) {
     console.error(`Could not sign in: ${error?.message ?? 'no session'}`)
-    die('Refresh tokens rotate. Copy a fresh one from the web app.')
+    die('That token has been retired. Copy a fresh one and run `cicerone login`.')
   }
+
+  // The token just used is now spent. Saving its replacement is what keeps the
+  // routine signed in without anybody going back to the web app.
+  if (data.session?.refresh_token) writeToken(data.session.refresh_token)
   return new Store(db, data.user.id)
 }
 
@@ -150,6 +162,20 @@ async function main(): Promise<void> {
 
   if (!command || command === 'help' || command === '--help') {
     console.log(USAGE)
+    return
+  }
+
+  if (command === 'login') {
+    const token = rest[0]
+    if (!token) die('cicerone login <token from the site>')
+    writeToken(token)
+    console.log(`Saved to ${TOKEN_PATH}.`)
+
+    // Proved rather than assumed: a token that does not work should say so now
+    // rather than at three in the morning.
+    const store = await connect()
+    const trips = await store.listTrips()
+    console.log(`Signed in. ${trips.length} trip${trips.length === 1 ? '' : 's'} in the account.`)
     return
   }
 

@@ -5,7 +5,7 @@ import { withLegs } from '../src/corridor/legs.ts'
 import { renderBook } from '../src/render/book.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
 import { cityFrom } from '../src/photos/illustrate.ts'
-import { search, trackDownload, vouchedFor, type Candidate } from '../src/photos/unsplash.ts'
+import { describe, search, trackDownload, vouchedFor, type Candidate } from '../src/photos/unsplash.ts'
 import { fetchTrip } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import type { Corridor, Guide, Subject, Trip } from '../src/domain/types.ts'
@@ -203,7 +203,10 @@ function drawCandidates(): void {
 
     const tag = document.createElement('span')
     tag.className = 'tag'
-    tag.textContent = candidate.coords ? 'has coordinates' : 'no location'
+    // Where the photographer said they stood. Good evidence for the person
+    // choosing, and not enough for anything automatic — which is why this is
+    // shown rather than acted on. Coordinates are null on almost everything.
+    tag.textContent = candidate.where ?? 'location not given'
 
     cell.append(img, tag)
     cell.addEventListener('click', () => {
@@ -245,7 +248,11 @@ async function openSwap(subject: Subject): Promise<void> {
 
   const query = subjectName(subject)
   swapQuery.value = query
-  const candidates = await search(query, { accessKey: unsplashKey() })
+  const found = await search(query, { accessKey: unsplashKey() })
+  // Each candidate is asked where it was taken, because the search response
+  // omits `location` entirely. Up to eight small requests, once, while a
+  // person is looking at the dialog.
+  const candidates = await Promise.all(found.map((c) => describe(c, { accessKey: unsplashKey() })))
   swapping = { subject, candidates, picked: 0 }
   drawCandidates()
   describeChoice()
