@@ -23,7 +23,7 @@
  *   cicerone sources <id> [out]   what Wanderlog already cites about each stop
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { checkGuide, substantiatedShare, type CheckResult } from '../src/check.ts'
@@ -66,6 +66,32 @@ The session itself is saved by \`login\` and kept at ~/.config/cicerone/token.
 function die(message: string, code = 1): never {
   console.error(message)
   process.exit(code)
+}
+
+/**
+ * Why `check` and `save` bother to look at the shape of their first argument.
+ *
+ * `npm run cicerone check --trip a.json b.json` eats its own `--trip`. npm
+ * treats a leading flag after the script name as an npm option and strips it,
+ * so the offline check documented in the skill silently became
+ * `check a.json b.json` — a different command, run against the live database,
+ * whose error message was a Postgres complaint about uuid syntax. It cost an
+ * afternoon of inspecting a file that was fine.
+ *
+ * A trip id is a uuid, so anything else here is that mistake or a typo.
+ * Returns the thing to say about it, or undefined if the id looks real.
+ */
+const TRIP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function notATripId(command: string, id: string): string | undefined {
+  if (TRIP_ID.test(id)) return undefined
+  return (
+    `"${id}" is not a trip id.\n` +
+    (id.endsWith('.json')
+      ? 'For the offline check, npm needs a -- of its own so it stops eating the flag:\n' +
+        '  npm run --silent cicerone -- check --trip <trip.json> <passages.json>'
+      : `cicerone ${command} <id> [file.json] — ids come from \`cicerone pending\`.`)
+  )
 }
 
 /**
@@ -275,7 +301,7 @@ ${body}
 }
 
 /** A guide file is the passages the routine wrote; light is added here. */
-function readGuide(file: string, trip: Trip, tripId: string): Guide {
+export function readGuide(file: string, trip: Trip, tripId: string): Guide {
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(file, 'utf8'))
@@ -382,26 +408,8 @@ async function main(): Promise<void> {
     const id = rest[0]
     if (!id) die(`cicerone ${command} <id> <file.json>`)
 
-    /*
-     * `npm run cicerone check --trip a.json b.json` eats its own `--trip`.
-     *
-     * npm treats a leading `--flag` after the script name as an npm option
-     * and strips it, so the offline check documented in the skill silently
-     * became `check a.json b.json` — a different command, run against the
-     * live database, whose error message was a Postgres uuid syntax
-     * complaint. It cost an afternoon of believing the file was malformed.
-     *
-     * A trip id is a uuid. Anything else here is that mistake, so say so.
-     */
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-      die(
-        `"${id}" is not a trip id.\n` +
-          (id.endsWith('.json')
-            ? 'For the offline check, npm needs a -- of its own so it stops eating the flag:\n' +
-              '  npm run --silent cicerone -- check --trip <trip.json> <passages.json>'
-            : `cicerone ${command} <id> [file.json] — ids come from \`cicerone pending\`.`),
-      )
-    }
+    const fault = notATripId(command, id)
+    if (fault) die(fault)
 
     const store = await connect()
     const saved = await store.getTrip(id)
@@ -602,4 +610,15 @@ async function main(): Promise<void> {
   die(`Unknown command "${command}".\n\n${USAGE}`)
 }
 
-await main()
+/*
+ * Run only when this file is the command being run.
+ *
+ * It used to call main() on import, which meant importing anything from here
+ * executed the CLI — so the two functions above, both of which have shipped
+ * broken, could not be tested at all. Two commits in one afternoon said "no
+ * test" for that reason, which is one more than it takes to notice.
+ */
+const invokedDirectly =
+  process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+
+if (invokedDirectly) await main()
