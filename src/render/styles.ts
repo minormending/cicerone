@@ -154,9 +154,13 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
 .corridor-head .dot { width: 4px; height: 4px; border-radius: 50%; background: #B3AC9B; }
 .corridor-route { font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em; color: #6E6A5E;
   text-transform: uppercase; }
-.corridor-body { columns: 2; column-gap: 56px; }
-.corridor-body p { margin: 0 0 16px; font-size: 19px; line-height: 1.7; color: #33404F;
-  break-inside: avoid; }
+/* Single column, deliberately. Two columns looked right in a mockup and
+   measured 170px wide on a real page — about eighteen characters a line,
+   against the forty-five a reader wants. The band already makes a corridor
+   read as a different kind of thing; the columns were decoration that cost
+   legibility to get it. */
+.corridor-body { max-width: 34rem; }
+.corridor-body p { margin: 0 0 16px; font-size: 19px; line-height: 1.7; color: #33404F; }
 .corridor-body p:last-child { margin-bottom: 0; }
 
 /* ---- computed passages say what they are ---- */
@@ -196,7 +200,6 @@ body[data-claims='off'] .claim { display: none; }
   .entry p, .corridor-body p { font-size: 18px; }
   .figures { gap: 24px; flex-wrap: wrap; }
   .corridor { margin: 40px -20px 0; padding: 32px 20px 34px; }
-  .corridor-body { columns: 1; }
   .route { padding: 22px 20px 16px; }
   /* Five names will not fit across a phone and ran off the edge of the box.
      The ends are what orient a reader; the middle is on the page below. */

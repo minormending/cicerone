@@ -30,7 +30,7 @@ import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import { illustrate } from '../src/photos/illustrate.ts'
 import { readToken, TOKEN_PATH, writeToken } from '../src/backend/session.ts'
-import type { Guide, Passage, Trip } from '../src/domain/types.ts'
+import type { Coordinates, Corridor, Guide, Passage, TransportMode, Trip } from '../src/domain/types.ts'
 
 const USAGE = `cicerone — the seam between the routine and the database
 
@@ -135,6 +135,58 @@ function report(result: CheckResult): void {
   }
 }
 
+/**
+ * Whatever shape of trip somebody points `check --trip` at.
+ *
+ * The obvious file to hand it is the one `cicerone trip` just wrote, which is
+ * the brief rather than the graph — so that is what it takes. Anything else
+ * would make the documented workflow fail on its first command, which it did:
+ * every subject came back unknown because the brief calls the field `day` and
+ * carries no legs at all.
+ *
+ * A raw graph, or a stored row with one inside, still work.
+ */
+function readTripFile(parsed: unknown): { trip: Trip; corridors: Corridor[] } {
+  const asBrief = parsed as {
+    trip?: { id?: string; title?: string; departsOn?: string }
+    places?: Array<{ id: string; name: string; day?: number; arrive?: string; coords: Coordinates }>
+    corridors?: Array<{ id: string; day?: number; mode?: TransportMode; view?: Corridor['view'] }>
+  }
+
+  if (Array.isArray(asBrief.corridors) && Array.isArray(asBrief.places)) {
+    const trip: Trip = {
+      id: asBrief.trip?.id ?? 'trip',
+      title: asBrief.trip?.title ?? 'Trip',
+      ...(asBrief.trip?.departsOn ? { departsOn: asBrief.trip.departsOn } : {}),
+      places: asBrief.places.map((p) => ({
+        id: p.id,
+        name: p.name,
+        coords: p.coords,
+        ...(p.day !== undefined ? { dayIndex: p.day } : {}),
+        ...(p.arrive ? { arrive: p.arrive } : {}),
+      })),
+      legs: [],
+    }
+    // The brief already names its corridors, so they are taken rather than
+    // re-derived: the ids the routine was given are the ids it must use.
+    const corridors: Corridor[] = asBrief.corridors.map((c) => ({
+      id: c.id,
+      legId: c.id.replace(/^corridor:/, 'leg:'),
+      fromPlaceId: '',
+      toPlaceId: '',
+      mode: c.mode ?? 'walk',
+      view: c.view ?? 'open',
+      ...(c.day !== undefined ? { dayIndex: c.day } : {}),
+    }))
+    return { trip, corridors }
+  }
+
+  const graph = ('graph' in (parsed as object) ? (parsed as { graph: Trip }).graph : parsed) as Trip
+  if (!Array.isArray(graph?.places)) die('That file is neither a trip brief nor a trip graph.')
+  const withL = withLegs(graph)
+  return { trip: withL, corridors: corridorsOf(withL) }
+}
+
 /** A guide file is the passages the routine wrote; light is added here. */
 function readGuide(file: string, trip: Trip, tripId: string): Guide {
   let parsed: unknown
@@ -209,17 +261,16 @@ async function main(): Promise<void> {
     const passageFile = rest[2]
     if (!tripFile || !passageFile) die('cicerone check --trip <trip.json> <passages.json>')
 
-    let graph: Trip
+    let parsed: unknown
     try {
-      const parsed = JSON.parse(readFileSync(tripFile, 'utf8')) as Trip | { graph: Trip }
-      graph = 'graph' in parsed ? parsed.graph : parsed
+      parsed = JSON.parse(readFileSync(tripFile, 'utf8'))
     } catch (err) {
       die(`Could not read ${tripFile}: ${(err as Error).message}`)
     }
 
-    const withL = withLegs(graph)
-    const guide = readGuide(passageFile, withL, graph.id)
-    const result = checkGuide({ trip: withL, corridors: corridorsOf(withL), guide })
+    const { trip, corridors } = readTripFile(parsed)
+    const guide = readGuide(passageFile, trip, trip.id)
+    const result = checkGuide({ trip, corridors, guide })
     report(result)
     if (!result.ok) die(`\n${result.faults.length} fault(s).`)
     return
