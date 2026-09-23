@@ -419,6 +419,22 @@ export function tripFromWanderlog(
       if (scheduled) place.dayIndex = dayIndex
       else report.unscheduled++
       if (entry.time) place.arrive = entry.time
+      /*
+       * Why the stop is on the day, in the traveller's own words.
+       *
+       * `noteText` has read these since the beginning and `brief()` has
+       * serialised them since the beginning, and the line joining the two was
+       * never written — so every note anybody wrote was collected, carried
+       * halfway, and dropped on the floor. On one Prague trip that is a
+       * sentence against nearly every scheduled stop saying exactly what it is
+       * for: "6 min from the hotel; fast, which suits an arrival day",
+       * "groceries, open to 21:00, on the way to the metro".
+       *
+       * That is the single most valuable field in the document. Everything
+       * else here describes what a place *is*; this is the only thing that
+       * says why it was chosen, and no amount of research reconstructs it.
+       */
+      if (entry.note) place.note = entry.note
       // Carried on the place because a leg is derived from the pair, and the
       // mode the document states belongs to arriving *here*.
       if (entry.travelMode) place.arriveBy = entry.travelMode
