@@ -30,6 +30,12 @@ export interface Place {
   photoUrl?: string
   /** Degrees clockwise from north, for the computed light passage. */
   facadeBearing?: number
+  /**
+   * How the traveller said they get here, where they said. Wanderlog carries
+   * this on every block and leaves it null on almost all of them, so it is a
+   * correction to the inferred mode rather than a replacement for it.
+   */
+  arriveBy?: TransportMode
 }
 
 export const TRANSPORT_MODES = [

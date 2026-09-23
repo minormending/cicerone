@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 because the build stamps a version from
+      # `git rev-list --count HEAD`. The default shallow clone returns 1, which
+      # would stamp v1 on every deploy forever — a version that looks real and
+      # never changes. build-web.ts throws rather than ship that.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build:web
+        env:
+          # There is no local-only mode here, so a blank PUBLIC_SUPABASE_URL is
+          # a broken deploy rather than a lesser one. build-web.ts throws on it
+          # when CI is set, which is what keeps that from shipping quietly.
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+          # Absent, the reader still works and the photo swap says it is off.
+          PUBLIC_UNSPLASH_ACCESS_KEY: ${{ secrets.PUBLIC_UNSPLASH_ACCESS_KEY }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

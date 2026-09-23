@@ -179,3 +179,19 @@ test('a place on no day is not part of the journey', () => {
   assert.equal(legs.length, 1)
   assert.equal(legs[0]?.toPlaceId, 'b')
 })
+
+test('a mode the traveller stated beats any distance heuristic', () => {
+  // Wanderlog carries travelMode on every block and leaves it null on 97 of
+  // the 99 in a real trip. Rare, and worth honouring exactly when it happens:
+  // they know they are getting a tram.
+  const legs = inferLegs([
+    place('a', 'A', 50.0875, 14.4212),
+    place('b', 'B', 50.0870, 14.4207, { arriveBy: 'transit' }),
+  ])
+  assert.equal(legs[0]?.mode, 'transit', 'four hundred metres, and still not a walk')
+})
+
+test('with nothing stated the distance decides', () => {
+  const legs = inferLegs([place('a', 'A', 50.0875, 14.4212), place('b', 'B', 50.087, 14.4207)])
+  assert.equal(legs[0]?.mode, 'walk')
+})

@@ -1,5 +1,5 @@
 import { timezoneForCountry } from '../geo/timezones.ts'
-import type { Coordinates, Place, Trip } from '../domain/types.ts'
+import type { Coordinates, Place, TransportMode, Trip } from '../domain/types.ts'
 
 /**
  * Maps a Wanderlog trip document into a trip graph.
@@ -207,6 +207,8 @@ interface Extracted {
   /** The country the record stated, where its own address disagreed. */
   correctedFrom?: string
   time?: string
+  /** The mode Wanderlog states for arriving here. Almost always absent. */
+  travelMode?: TransportMode
 }
 
 /** A section is an object carrying a heading; days and buckets both.
@@ -229,6 +231,37 @@ function isSection(value: unknown): value is Record<string, unknown> {
  *  Filtering on `type` alone put thirty rejected candidates ahead of the trip. */
 function isDay(section: Record<string, unknown>): boolean {
   return section['mode'] === 'dayPlan'
+}
+
+/**
+ * The mode the document states, where it states one.
+ *
+ * Every block carries a `travelMode` field and it is `null` on 97 of the 99
+ * blocks in a real, fully planned trip — the traveller never set it. So this
+ * is not a replacement for inferring a mode, only a correction to it: a
+ * stated mode always wins, and the rest are worked out from the distance and
+ * the clock.
+ *
+ * `itinerary.options.defaultTravelMode` is the trip-wide fallback and is a
+ * preference rather than a statement about any particular leg, so it is
+ * deliberately not used: "transit" set once in the settings does not make the
+ * four-minute walk between two palaces a tram ride.
+ */
+const WANDERLOG_MODES: Record<string, TransportMode> = {
+  walking: 'walk',
+  walk: 'walk',
+  bicycling: 'cycle',
+  cycling: 'cycle',
+  driving: 'drive',
+  drive: 'drive',
+  transit: 'transit',
+  flying: 'flight',
+  flight: 'flight',
+}
+
+export function travelModeFrom(entry: Record<string, unknown>): TransportMode | undefined {
+  const raw = entry['travelMode']
+  return typeof raw === 'string' ? WANDERLOG_MODES[raw.toLowerCase()] : undefined
 }
 
 function timeFrom(entry: Record<string, unknown>): string | undefined {
@@ -273,6 +306,8 @@ function collectPlaces(
         }
         const time = timeFrom(node)
         if (time) extracted.time = time
+        const stated = travelModeFrom(node)
+        if (stated) extracted.travelMode = stated
         out.push(extracted)
       } else {
         // Named but unplaceable. Recorded rather than dropped in silence,
@@ -370,6 +405,9 @@ export function tripFromWanderlog(
       if (scheduled) place.dayIndex = dayIndex
       else report.unscheduled++
       if (entry.time) place.arrive = entry.time
+      // Carried on the place because a leg is derived from the pair, and the
+      // mode the document states belongs to arriving *here*.
+      if (entry.travelMode) place.arriveBy = entry.travelMode
       if (entry.region) {
         place.countryCode = entry.region
         if (entry.correctedFrom) {

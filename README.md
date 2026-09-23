@@ -21,6 +21,16 @@ That content cannot be pre-written or scraped, because until somebody has an
 actual itinerary there is no such thing as "the thirty minutes between the
 cathedral and dinner". The corridor only exists once the trip does.
 
+A corridor is any leg you are **awake for** — a clock test against the
+itinerary's own times, not a mode test. Within those, one further question
+decides what can be written:
+
+| | example | gets |
+| --- | --- | --- |
+| awake, can see out | walking, tram, rail, ferry | `passing`, `event`, `look_for` |
+| awake, cannot | daytime flight, metro | `prepare` |
+| asleep | red-eye, sleeper | nothing |
+
 ## How it works
 
 ```
@@ -28,7 +38,7 @@ Wanderlog key → edge function → trip graph → Supabase
                                                   ↓
                         a scheduled Claude routine researches and writes
                                                   ↓
-                                            passages, with sources
+                                          passages, with sources
                                                   ↓
                                  the book, or the where-am-I-now view
 ```
@@ -36,6 +46,71 @@ Wanderlog key → edge function → trip graph → Supabase
 Logistics — times, routes, hours, costs — are read from the import and shown
 as the spine the narrative hangs on. They are never recomputed here. That is
 Wanderlog's job and it already does it well.
+
+## Running it
+
+```bash
+npm install
+npm test
+npm run build:web
+
+# the routine's side of the seam
+npm run cicerone import <wanderlog-key>
+npm run cicerone pending
+npm run cicerone trip <id> > trip.json
+#  ... the write-the-guide skill researches and writes passages.json ...
+npm run cicerone save <id> passages.json
+npm run cicerone photos <id>
+```
+
+`save` runs `check` first and refuses on a fault, so the quality bar is code
+rather than a request. `check` can be run by anybody, over any guide, with no
+model in the loop.
+
+### Environment
+
+| | |
+| --- | --- |
+| `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` | the project; both ship in the bundle by design |
+| `SUPABASE_REFRESH_TOKEN` | your session, for the CLI |
+| `PUBLIC_UNSPLASH_ACCESS_KEY` | photographs; absent, the swap says it is off |
+| `DATABASE_URL` | migrations only |
+
+## What is written, and what is refused
+
+The unit is a **passage** — several paragraphs somebody would read aloud while
+you stood there — not a fact with a label on it. Each carries its sources, and
+each specific assertion carries its own claim pointing at one of them.
+
+Two rules hold the whole thing up:
+
+**A specific with nothing behind it does not ship.** "Charles IV laid the first
+stone in 1344" needs a source. "Charles IV laid the first stone and did not
+expect to see it finished" does not — the guide is allowed to know things
+stated generally. `check` catches an unsourced year.
+
+**Saying nothing is a legitimate answer.** A cathedral has libraries written
+about it; the suburban bakery on day four has a Google listing. A guide that
+produces four paragraphs for both is lying about the second. A trip where two
+thirds of the stops have no passage is a good guide, and nothing in the
+pipeline pushes toward filling them.
+
+The number worth watching is the share of researched passages carrying a
+sourced claim. Prose that survives with none is atmosphere, and a guide made
+mostly of atmosphere is the failure this design exists to avoid.
+
+## Photographs
+
+A photograph captioned as a place is a factual claim, and Unsplash matches on
+user-supplied tags that are often approximate. So a picture earns a place's
+own name only when its **own coordinates** put it within 150 m — not its
+title, not its tags, not the order the results came back in. Everything else
+runs as atmosphere, captioned by city.
+
+Any photograph can be swapped, and choosing one by hand makes it captionable
+by name: somebody who knows what the place looks like has supplied the
+evidence the coordinates were standing in for. A chosen picture survives every
+rebuild of the guide.
 
 ## Status
 

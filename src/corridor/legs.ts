@@ -1,13 +1,14 @@
 import type { Coordinates, Leg, Place, TransportMode, Trip } from '../domain/types.ts'
 
 /**
- * Legs between consecutive stops, because the document does not carry them.
+ * Legs between consecutive stops, because the document barely carries them.
  *
  * This wants stating plainly, because it sits close to a line the spec draws.
- * The Wanderlog view-key document is a list of places with times on them: no
- * transport modes, no routes, no durations. Searching the whole 153 kB of a
- * real Prague trip finds the words "walk" and "flight" only inside the
- * traveller's own notes.
+ * The Wanderlog document is a list of places with times on them. It has no
+ * routes and no durations at all, and it *does* carry a `travelMode` per
+ * block — which is null on 97 of the 99 blocks of a real, fully planned trip,
+ * because the traveller never set it. A stated mode wins where there is one;
+ * the rest have to be worked out.
  *
  * So the rule "logistics are read, never derived" needs a finer edge:
  *
@@ -108,11 +109,15 @@ export function inferLegs(places: Place[]): Leg[] {
     const arriveAt = to.arrive
     const minutes = gapMinutes(minutesOfDay(departAt), minutesOfDay(arriveAt))
 
+    // A stated mode always wins. The document carries one on every block and
+    // leaves it null on 97 of 99 in a real trip, so this is rare and worth
+    // honouring exactly when it happens: the traveller knows they are getting
+    // a tram, and no distance heuristic gets to overrule them.
     const leg: Leg = {
       id: `leg:${from.id}:${to.id}`,
       fromPlaceId: from.id,
       toPlaceId: to.id,
-      mode: inferMode(metres, minutes),
+      mode: to.arriveBy ?? inferMode(metres, minutes),
     }
     // Distance is straight-line and is kept for the mode decision and for
     // ordering. It is never rendered: a crow-flies number presented as a
