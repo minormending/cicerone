@@ -381,6 +381,28 @@ async function main(): Promise<void> {
   if (command === 'check' || command === 'save') {
     const id = rest[0]
     if (!id) die(`cicerone ${command} <id> <file.json>`)
+
+    /*
+     * `npm run cicerone check --trip a.json b.json` eats its own `--trip`.
+     *
+     * npm treats a leading `--flag` after the script name as an npm option
+     * and strips it, so the offline check documented in the skill silently
+     * became `check a.json b.json` — a different command, run against the
+     * live database, whose error message was a Postgres uuid syntax
+     * complaint. It cost an afternoon of believing the file was malformed.
+     *
+     * A trip id is a uuid. Anything else here is that mistake, so say so.
+     */
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      die(
+        `"${id}" is not a trip id.\n` +
+          (id.endsWith('.json')
+            ? 'For the offline check, npm needs a -- of its own so it stops eating the flag:\n' +
+              '  npm run --silent cicerone -- check --trip <trip.json> <passages.json>'
+            : `cicerone ${command} <id> [file.json] — ids come from \`cicerone pending\`.`),
+      )
+    }
+
     const store = await connect()
     const saved = await store.getTrip(id)
     if (!saved) die(`No trip ${id}.`)

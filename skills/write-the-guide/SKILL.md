@@ -19,14 +19,30 @@ between the fourth stop and the fifth.
 npm run cicerone pending                         # trips waiting
 npm run --silent cicerone trip ID > trip.json    # the graph and its corridors
 npm run cicerone sources ID sources.json         # what is already cited about each stop
+npm run cicerone guide ID passages.json          # what is already written, if anything
 # ... research and write passages.json ...
-npm run --silent cicerone check --trip trip.json passages.json   # offline, as often as you like
+npm run --silent cicerone -- check --trip trip.json passages.json   # offline, as often as you like
 npm run cicerone save ID passages.json           # checks, then writes
 npm run cicerone book ID out.html                # read what you wrote
 ```
 
+**That `--` before `check` is load-bearing.** npm treats a leading `--trip`
+after the script name as its own option and strips it, so without the
+separator the command silently becomes `check trip.json passages.json` — a
+different command, run against the live database, which fails with a Postgres
+error about uuid syntax and sends you off inspecting your file. The CLI now
+recognises that mistake and says so, but the `--` is the fix.
+
+**`save` replaces a trip's whole set of passages, not just the ones you hand
+it.** If a guide already exists and you are adding to it — a few corridors, a
+stop you skipped — start from `cicerone guide`, keep what is there, and save
+the combined set. Passages you leave out are deleted.
+
 Read the book back when you are done. Passages that are fine on their own can
 read badly in sequence, and the only way to find that is to read the chapter.
+This is where you catch the same fact told twice two days apart — which is not
+a duplicate to delete but a callback to write, because the second telling is
+the one where they are standing on the spot.
 
 Use `--silent` whenever you redirect output. Without it npm writes a two-line
 banner into your file and the next command cannot parse it.
