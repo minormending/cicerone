@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dayTitle, escapeHtml, mapPoints, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
+import { dateRange, dayTitle, escapeHtml, mapPoints, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
 import { MAP_JS } from '../src/render/maps.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
@@ -509,4 +509,41 @@ test('a stop photograph reaches back across the rail, and stops on a phone', () 
   assert.match(BOOK_CSS, /\.entry-body > figure \{ margin-left: calc\(-1 \* \(var\(--rail\) \+ var\(--rail-gap\)\)\); \}/)
   const mobile = BOOK_CSS.slice(BOOK_CSS.indexOf('@media (max-width: 860px)'))
   assert.match(mobile.slice(0, mobile.indexOf('@media print')), /\.entry-body > figure \{ margin-left: 0; \}/)
+})
+
+test('a date range says the month once when both ends share it', () => {
+  // "Wednesday 14 October to Sunday 18 October" is a lot of words for one
+  // line on a cover, and nobody writing it by hand would repeat the month.
+  assert.equal(dateRange({ ...TRIP, departsOn: '2026-10-14' }, 5), '14 – 18 October 2026')
+  assert.equal(dateRange({ ...TRIP, departsOn: '2026-10-30' }, 4), '30 October – 2 November 2026')
+  assert.equal(dateRange({ ...TRIP, departsOn: '2026-10-14' }, 1), '14 – 14 October 2026')
+  const undated: Trip = { ...TRIP }
+  delete undated.departsOn
+  assert.equal(dateRange(undated, 5), '', 'a trip with no departure says nothing')
+})
+
+test('the book opens on a title page', () => {
+  // It opened on "Day One" with no cover, which is the one thing every
+  // printed guide has and the reason a stack of chapters is not a book.
+  const october: Trip = { ...TRIP, departsOn: '2026-10-14' }
+  const html = renderBook(october, guide([passage()]), { corridors: [CORRIDOR], city: 'Prague' })
+  const front = html.slice(html.indexOf('<div class="wrap">'), html.indexOf('<section class="day"'))
+  assert.match(front, /<header class="title-page">/)
+  assert.match(front, /<h1>Prague<\/h1>/)
+  assert.match(front, /14 . 14 October 2026/, 'the dates, said once')
+  // The counts are the honest advertisement for what this is, and corridors
+  // are on it deliberately: they are the part no other guide has.
+  assert.match(front, /Stops/)
+  assert.match(front, /Corridors/)
+  assert.match(front, /Checked claims|Checked claim/)
+})
+
+test('the title page owns page one when it prints', () => {
+  const print = BOOK_CSS.slice(BOOK_CSS.indexOf('@media print'))
+  assert.match(print, /\.title-page \{ break-after: page;/)
+  // The old exception kept day one on the cover's page. With a cover there
+  // to break after, no .day is a first child any more, so the rule is gone —
+  // though the comment explaining why still names it, which is why this looks
+  // for the rule and not the string.
+  assert.doesNotMatch(print, /\.day:first-child \{/)
 })

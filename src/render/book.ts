@@ -82,6 +82,64 @@ export function dateOf(trip: Trip, dayIndex: number): string {
   }).format(at)
 }
 
+/**
+ * The span of the trip, as a book's title page would set it.
+ *
+ * "Wednesday 14 October to Sunday 18 October" twice over is a lot of words
+ * for one line, so the month and year are said once when both ends share
+ * them — which is how anybody writing a date range by hand would do it.
+ */
+export function dateRange(trip: Trip, days: number): string {
+  if (!trip.departsOn) return ''
+  const start = new Date(trip.departsOn)
+  const end = new Date(start.getTime() + Math.max(0, days - 1) * 86_400_000)
+  const part = (at: Date, opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(at)
+
+  const year = part(end, { year: 'numeric' })
+  if (part(start, { month: 'long' }) === part(end, { month: 'long' })) {
+    return `${part(start, { day: 'numeric' })} \u2013 ${part(end, { day: 'numeric', month: 'long' })} ${year}`
+  }
+  return `${part(start, { day: 'numeric', month: 'long' })} \u2013 ${part(end, { day: 'numeric', month: 'long' })} ${year}`
+}
+
+/**
+ * The front of the book.
+ *
+ * It opened on "Day One" with no cover, which is the one thing every printed
+ * guide has and the reason a stack of chapters does not feel like a book.
+ * Everything on it is derived — the city, the dates, four counts — because a
+ * title page makes no claim about the world that could be wrong, and the
+ * parts of this book that could be wrong are written and checked elsewhere.
+ *
+ * The counts are the honest advertisement for what this is. Corridors are on
+ * it deliberately: they are the thing no other guide has, and a reader who
+ * does not know to look for them will read the book as a list of stops.
+ */
+function titlePage(
+  trip: Trip,
+  city: string,
+  counts: { days: number; stops: number; corridors: number; claims: number },
+): string {
+  const when = dateRange(trip, counts.days)
+  const figure = (n: number, label: string) =>
+    `<div><div class="figure-n">${n}</div><div class="figure-l">${escapeHtml(label)}</div></div>`
+
+  return `<header class="title-page">
+<div class="label accent">${escapeHtml(when || trip.title)}</div>
+<h1>${escapeHtml(city)}</h1>
+<p class="title-lead">${counts.stops} stops over ${counts.days} day${
+    counts.days === 1 ? '' : 's'
+  }, and the ground in between &mdash; which is the half nobody writes about.</p>
+<div class="figures">
+${figure(counts.days, counts.days === 1 ? 'Day' : 'Days')}
+${figure(counts.stops, 'Stops')}
+${figure(counts.corridors, 'Corridors')}
+${figure(counts.claims, counts.claims === 1 ? 'Checked claim' : 'Checked claims')}
+</div>
+</header>`
+}
+
 const ORDINALS = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN']
 
 /**
@@ -674,5 +732,15 @@ ${footnotes
 </div>
 </div>`
 
-  return `<div class="wrap">${chapters.join('\n')}${checked}</div>`
+  const writtenCorridors = new Set(
+    guide.passages.filter((p) => p.subject.kind === 'corridor').map((p) => p.subject.id),
+  ).size
+  const front = titlePage(trip, city, {
+    days: days.size,
+    stops: [...days.values()].reduce((n, stops) => n + stops.length, 0),
+    corridors: writtenCorridors,
+    claims: footnotes.length,
+  })
+
+  return `<div class="wrap">${front}${chapters.join('\n')}${checked}</div>`
 }

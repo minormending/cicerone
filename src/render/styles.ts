@@ -83,6 +83,18 @@ a:hover { color: #8F2C24; }
 
 /* ---- the day opener ---- */
 
+/* ---- the title page ---- */
+
+.title-page { padding: 104px 0 76px; }
+.title-page h1 {
+  margin: 18px 0 0; font-family: var(--sans); font-size: 84px; font-weight: 600;
+  line-height: 0.98; letter-spacing: -0.035em; color: var(--ink);
+}
+.title-lead {
+  margin: 22px 0 0; max-width: 30rem; font-size: 21px; line-height: 1.6; color: var(--ink-3);
+}
+.title-page .figures { padding-top: 40px; border-top: 1px solid var(--rule); margin-top: 44px; }
+
 .day { padding-top: 72px; }
 .day + .day { border-top: 1px solid var(--rule); margin-top: 72px; }
 
@@ -279,6 +291,9 @@ body[data-claims='off'] .claim { display: none; }
   body { font-size: 17px; }
   .wrap { padding: 0 20px 56px; }
   .day h1 { font-size: 30px; }
+  .title-page { padding: 56px 0 44px; }
+  .title-page h1 { font-size: 46px; }
+  .title-lead { font-size: 18px; }
   .day-lead, .entry, .checked { flex-direction: column; gap: 18px; }
   /* The rail is gone at this width, so there is nothing to reach back across
      and the offset would push the picture off the left of the screen. */
@@ -309,7 +324,11 @@ body[data-claims='off'] .claim { display: none; }
      and the renderer does not, but print is the one place the two meet. */
   .swap, .controls, .build-tag, #auth, #status, #intro, #now, dialog { display: none; }
   .day { break-before: page; padding-top: 0; }
-  .day:first-child { break-before: avoid; }
+  /* The title page owns page one and pushes the first chapter onto page two,
+     which is what the old .day:first-child exception was standing in for back
+     when there was no cover to break after. */
+  .title-page { break-after: page; padding: 0 0 24pt; }
+  .title-page h1 { font-size: 40pt; }
   .entry, .corridor { break-inside: avoid; }
   /* The sand band is a screen device. On paper twenty-three of them are the
      single biggest thing on the page by area, and a laser prints that as a
