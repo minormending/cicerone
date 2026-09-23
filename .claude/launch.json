@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cicerone",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "serve:dist"],
+      "port": 8788
+    }
+  ]
+}

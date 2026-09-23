@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cicerone">
+  <rect width="64" height="64" fill="#14273D"/>
+  <path d="M17 42 C 25 42, 26 30, 33 29 S 43 36, 48 26" fill="none" stroke="#E2574C" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="17" cy="42" r="3.6" fill="#FBFAF7"/>
+  <circle cx="33" cy="29" r="3.6" fill="#FBFAF7"/>
+  <circle cx="48" cy="26" r="3.6" fill="#E2574C"/>
+</svg>

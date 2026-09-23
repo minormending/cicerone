@@ -83,6 +83,35 @@ function dateOf(trip: Trip, dayIndex: number): string {
 
 const ORDINALS = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN']
 
+/** Everything before the first comma, bracket or dash. */
+export function shortName(name: string): string {
+  return name.split(/[,(\u2013-]/)[0]?.trim() || name
+}
+
+/**
+ * What to call a day.
+ *
+ * Derived from its own ends rather than invented, because an invented title
+ * is the first place a guide starts sounding like a brochure. One stop is its
+ * own title; several are the span between the first and the last.
+ */
+export function dayTitle(stops: Place[], city: string): string {
+  const first = stops[0]
+  const last = stops[stops.length - 1]
+  if (!first) return city
+  if (!last || first === last) return shortName(first.name)
+  const from = shortName(first.name)
+  const to = shortName(last.name)
+  return from === to ? from : `${from} to ${to}`
+}
+
+/** Is this subject one of today's? */
+function onThisDay(subject: Subject, stops: Place[], corridors: Corridor[]): boolean {
+  return subject.kind === 'place'
+    ? stops.some((p) => p.id === subject.id)
+    : corridors.some((c) => c.id === subject.id)
+}
+
 /**
  * The route, drawn as a coral line.
  *
@@ -154,6 +183,25 @@ const KIND_LABEL: Record<Passage['kind'], string> = {
   prepare: 'Before you board',
 }
 
+/**
+ * The order passages read in, which is not alphabetical and is not the order
+ * they were written.
+ *
+ * Why this exists: sorted by name, `look_for` came before `origin`, so every
+ * stop opened with its golden hour and the history sat underneath. The
+ * computed light passage is a footnote to a place, not its headline, and it
+ * goes last for the same reason.
+ */
+const KIND_ORDER: Record<Passage['kind'], number> = {
+  origin: 0,
+  event: 1,
+  craft: 2,
+  table: 3,
+  passing: 4,
+  prepare: 5,
+  look_for: 6,
+}
+
 interface Numbered {
   passage: Passage
   offset: number
@@ -221,7 +269,9 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
   const numbered = new Map<string, Numbered[]>()
   const footnotes: Array<{ n: number; claim: Passage['claims'][number]; passage: Passage }> = []
 
-  const order: Passage[] = [...guide.passages].sort((a, b) => a.kind.localeCompare(b.kind))
+  const order: Passage[] = [...guide.passages].sort(
+    (a, b) => Number(a.computed ?? false) - Number(b.computed ?? false) || KIND_ORDER[a.kind] - KIND_ORDER[b.kind],
+  )
   for (const passage of order) {
     const key = subjectKey(passage.subject)
     const list = numbered.get(key) ?? []
@@ -250,7 +300,15 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
     }
 
     const written = parts.filter(Boolean)
-    if (written.length === 0) continue
+    // A computed light passage rides along; it does not justify a chapter on
+    // its own. Day one of a real trip was an airport with a golden-hour note
+    // against it and nothing else, which is precisely the padding this design
+    // is meant to refuse.
+    const researched = [...(numbered.values() as Iterable<Numbered[]>)]
+      .flat()
+      .filter((n) => !n.passage.computed)
+      .some((n) => onThisDay(n.passage.subject, stops, corridors))
+    if (written.length === 0 || !researched) continue
 
     const walked = corridors.filter((c) => c.mode === 'walk').length
     chapters.push(`<section class="day">
@@ -260,7 +318,7 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
     }</div>
 <div class="label">${escapeHtml(city)}</div>
 </div>
-<h1>${escapeHtml(stops[0]?.name ?? city)}, and what follows</h1>
+<h1>${escapeHtml(dayTitle(stops, city))}</h1>
 <div class="day-lead">
 <p>${stops.length} stop${stops.length === 1 ? '' : 's'}${walked > 0 ? `, ${walked} of them joined on foot` : ''}.</p>
 <div class="figures">
@@ -268,12 +326,16 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
 <div><div class="figure-n">${corridors.length}</div><div class="figure-l">Corridors</div></div>
 </div>
 </div>
-<div class="route">${routeSvg(stops)}
+${
+      stops.length > 1
+        ? `<div class="route">${routeSvg(stops)}
 <div class="route-stops">${stops
-      .slice(0, 5)
-      .map((p) => `<span>${escapeHtml(p.name.split(/[,(–-]/)[0]?.trim() ?? p.name)}</span>`)
-      .join('')}</div>
-</div>
+            .slice(0, 5)
+            .map((p) => `<span>${escapeHtml(shortName(p.name))}</span>`)
+            .join('')}</div>
+</div>`
+        : ''
+    }
 ${written.join('\n')}
 </section>`)
   }

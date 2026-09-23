@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { escapeHtml, paragraphs, renderBook, routeSvg } from '../src/render/book.ts'
+import { dayTitle, escapeHtml, paragraphs, renderBook, routeSvg } from '../src/render/book.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
 import type { Corridor, Guide, Passage, Photo, Place, Trip } from '../src/domain/types.ts'
 
@@ -95,10 +95,46 @@ test('claims are numbered across the whole book so footnotes are stable', () => 
 test('a computed passage says it needs no source', () => {
   const html = renderBook(
     TRIP,
-    guide([passage({ kind: 'look_for', computed: true, body: 'Lit 16:12–17:04 today.' })]),
+    guide([passage(), passage({ id: 'l', kind: 'look_for', computed: true, body: 'Lit 16:12–17:04 today.' })]),
     { corridors: [] },
   )
   assert.ok(html.includes('no source needed'))
+})
+
+test('a computed passage does not justify a chapter on its own', () => {
+  // Day one of the real Prague trip was an airport with a golden-hour note
+  // against it and nothing else. That is a page of padding wearing a
+  // chapter's clothes, and light rides along rather than carrying a day.
+  const html = renderBook(
+    TRIP,
+    guide([passage({ kind: 'look_for', computed: true, body: 'Lit 16:12–17:04 today.' })]),
+    { corridors: [] },
+  )
+  assert.ok(!html.includes('class="day"'))
+})
+
+test('the headline is the history, not the golden hour', () => {
+  // Sorted by name, look_for came before origin, so every stop opened with its
+  // sun times and the history sat underneath.
+  const html = renderBook(
+    TRIP,
+    guide([
+      passage({ id: 'l', kind: 'look_for', computed: true, body: 'Low warm light 07:07–08:07.' }),
+      passage({ id: 'o', kind: 'origin', body: 'Charles IV laid the first stone and never saw it finished.' }),
+    ]),
+    { corridors: [] },
+  )
+  assert.ok(html.indexOf('Charles IV') < html.indexOf('Low warm light'))
+  assert.ok(html.indexOf('>Origin<') < html.indexOf('Charles IV'), 'and the label follows the lead passage')
+})
+
+test('a day is named after its own ends, not after a phrase', () => {
+  // An invented title is the first place a guide starts sounding like a
+  // brochure.
+  assert.equal(dayTitle([place('a', 'St. Vitus Cathedral'), place('b', 'Vinohradský Parlament')], 'Prague'),
+    'St. Vitus Cathedral to Vinohradský Parlament')
+  assert.equal(dayTitle([place('a', 'Grébovka (Havlíčkovy sady)')], 'Prague'), 'Grébovka')
+  assert.equal(dayTitle([], 'Prague'), 'Prague')
 })
 
 test('a corridor renders between the places it joins', () => {

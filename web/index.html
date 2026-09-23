@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cicerone</title>
+<meta name="description" content="A travel guide written for the trip you already planned.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#14273D">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/*__CSS__*/
+
+/* ---- chrome the book itself does not own ---- */
+
+#auth {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 120px; border-bottom: 1px solid var(--rule);
+  font-family: var(--sans); font-size: 13px; color: var(--ink-3);
+}
+#auth button, .controls button {
+  font-family: var(--sans); font-size: 12px; font-weight: 500;
+  min-height: 44px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--rule); background: transparent; color: var(--ink); cursor: pointer;
+}
+#auth button:hover, .controls button:hover { border-color: var(--faint); }
+#auth button.primary { background: var(--coral); border-color: var(--coral); color: var(--paper); }
+.auth-note { margin: 0; flex-basis: 100%; color: var(--faint); font-size: 12px; line-height: 1.5; }
+.auth-note.bad { color: var(--coral-ink); }
+
+.controls { display: flex; gap: 8px; flex-wrap: wrap; padding: 24px 120px 0; }
+#status { margin: 0; padding: 14px 120px 0; font-family: var(--sans); font-size: 13px; color: var(--faint); }
+#status:empty { display: none; }
+
+#intro { padding: 72px 120px; max-width: 760px; }
+#intro h1 { font-family: var(--sans); font-size: 46px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 20px; }
+#intro p { color: var(--ink-3); font-size: 19px; }
+#intro .row { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+#intro input {
+  flex-grow: 1; min-width: 220px; min-height: 44px; padding: 0 14px;
+  font-family: var(--sans); font-size: 14px; color: var(--ink);
+  background: #fff; border: 1px solid var(--rule); border-radius: 10px;
+}
+#intro button {
+  font-family: var(--sans); font-size: 13px; font-weight: 500; min-height: 44px; padding: 0 22px;
+  border-radius: 10px; border: none; background: var(--coral); color: var(--paper); cursor: pointer;
+}
+#intro button:disabled { opacity: 0.55; cursor: progress; }
+
+#trips { display: flex; flex-direction: column; gap: 2px; padding: 8px 0 0; }
+#trips button {
+  text-align: left; font-family: var(--sans); font-size: 14px; color: var(--ink);
+  background: transparent; border: none; border-radius: 8px; padding: 12px 14px;
+  min-height: 44px; cursor: pointer;
+}
+#trips button:hover { background: var(--sand); }
+#trips .when { color: var(--faint); font-size: 12px; }
+
+/* ---- the now view ---- */
+
+#now { background: var(--ink); color: #F3F1EC; min-height: 100vh; padding: 46px 24px 30px;
+  display: flex; flex-direction: column; }
+#now .label { color: #8FA0B2; }
+#now .label.accent { color: var(--coral); }
+#now .now-head { display: flex; align-items: center; gap: 11px; padding-bottom: 14px; }
+#now .dot { width: 3px; height: 3px; border-radius: 50%; background: #4E6B8B; }
+#now .now-mode { font-family: var(--sans); font-size: 10px; letter-spacing: 0.08em;
+  color: #8FA0B2; text-transform: uppercase; }
+#now .now-title { margin: 0 0 20px; font-family: var(--sans); font-size: 27px;
+  font-weight: 600; line-height: 1.16; letter-spacing: -0.01em; }
+#now .now-body p { font-size: 18px; line-height: 1.66; color: #E4E0D8; margin: 0 0 16px; }
+#now .now-quiet { color: #9FAEBE; font-style: italic; }
+#now .claim { color: var(--coral); }
+#now .now-next { margin-top: auto; padding-top: 18px; border-top: 1px solid #2E4560;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  font-family: var(--sans); font-size: 15px; }
+#now .now-empty { color: #C6D2DE; }
+#now .computed { background: #1B3149; border-color: #2E4560; color: #C6D2DE; }
+
+/* ---- swapping a photograph ---- */
+
+dialog#swap {
+  width: min(880px, 92vw); border: 1px solid var(--rule); border-radius: 14px;
+  background: var(--paper); color: var(--ink); padding: 26px 28px;
+  font-family: var(--serif);
+}
+dialog#swap::backdrop { background: rgba(20, 39, 61, 0.45); }
+#swap h2 { font-family: var(--sans); font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+#swap-note { display: flex; gap: 11px; align-items: flex-start; margin: 14px 0 18px;
+  font-size: 15px; line-height: 1.55; color: var(--ink-3); min-height: 48px; }
+#swap-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+#swap-grid button {
+  height: 108px; padding: 0; border-radius: 10px; cursor: pointer; overflow: hidden;
+  border: 1px solid var(--rule); background: var(--sand); position: relative;
+}
+#swap-grid button[aria-pressed='true'] { border: 2px solid var(--coral); }
+#swap-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#swap-grid .tag {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px;
+  font-family: var(--sans); font-size: 8px; font-weight: 600; letter-spacing: 0.1em;
+  background: rgba(20, 39, 61, 0.78); color: #F3F1EC; text-transform: uppercase;
+}
+#swap-form { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+#swap-form input {
+  flex-grow: 1; min-height: 44px; padding: 0 14px; font-family: var(--sans); font-size: 13px;
+  border: 1px solid var(--rule); border-radius: 10px; background: #fff; color: var(--ink);
+}
+#swap-form button, #swap-close {
+  min-height: 44px; font-family: var(--sans); font-size: 12px; font-weight: 500;
+  border-radius: 10px; padding: 0 20px; cursor: pointer; border: 1px solid var(--rule);
+  background: transparent; color: var(--ink);
+}
+#swap-form button { background: var(--coral); border-color: var(--coral); color: var(--paper); }
+
+@media (max-width: 860px) {
+  #auth, .controls, #status, #intro { padding-left: 20px; padding-right: 20px; }
+  #intro h1 { font-size: 32px; }
+  #swap-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body data-claims="on">
+
+<div id="auth" hidden></div>
+
+<div id="intro" hidden>
+  <h1>A guide to the trip you already planned</h1>
+  <p>Wanderlog tells you where you are going and how to get there. Cicerone tells you what you are looking at &mdash; and what to watch for between the fourth stop and the fifth.</p>
+  <p>Paste the share link or key of a Wanderlog trip. It is fetched once and kept in your account.</p>
+  <div class="row">
+    <label class="label" for="key" style="align-self:center">Trip</label>
+    <input id="key" type="text" inputmode="url" placeholder="wanderlog.com/plan/… or the key" autocomplete="off">
+    <button type="button" id="import">Import</button>
+  </div>
+  <p id="intro-note" class="auth-note"></p>
+  <div id="trips"></div>
+</div>
+
+<p id="status"></p>
+
+<div class="controls" hidden id="controls">
+  <button type="button" id="mode">Where I am now</button>
+  <button type="button" id="claims">Hide sources</button>
+  <button type="button" id="print">Print</button>
+  <button type="button" id="back">All trips</button>
+</div>
+
+<main id="book"></main>
+<div id="now" hidden></div>
+
+<dialog id="swap" aria-labelledby="swap-title">
+  <h2 id="swap-title">Choose the picture</h2>
+  <p class="label" id="swap-subject"></p>
+  <p id="swap-note"></p>
+  <div id="swap-grid"></div>
+  <form id="swap-form" method="dialog">
+    <label class="label" for="swap-q">Search</label>
+    <input id="swap-q" type="search" placeholder="vineyard, pavilion, autumn…">
+    <button type="button" id="swap-search">Search</button>
+    <button type="button" id="swap-close">Done</button>
+  </form>
+</dialog>
+
+<footer class="wrap" style="padding-top:0">
+  <p class="auth-note">Photographs from <a href="https://unsplash.com/?utm_source=cicerone&amp;utm_medium=referral">Unsplash</a>. Light timings computed with the <a href="https://gml.noaa.gov/grad/solcalc/calcdetails.html">NOAA</a> solar algorithm. Itineraries from <a href="https://wanderlog.com">Wanderlog</a>, which remains where you plan them.</p>
+  <div id="build"></div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
