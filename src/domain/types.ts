@@ -128,7 +128,11 @@ export const KIND_SUBJECTS: Record<PassageKind, ReadonlyArray<Subject['kind']>> 
   nearby: ['place'],
   look_for: ['place', 'corridor'],
   passing: ['corridor'],
-  prepare: ['corridor'],
+  // A corridor you cannot see out of, and also a place you are about to leave
+  // from. An airport on the morning of a flight is exactly the subject this
+  // kind was written for; it was corridor-only because corridors needed it
+  // first, not because places did not.
+  prepare: ['corridor', 'place'],
 }
 
 export interface Source {
