@@ -1,0 +1,52 @@
+# Typecheck and tests on every pull request.
+#
+# pages.yml already runs both before it builds, but only on a push to main —
+# which is after review, and after the branch protection that review is for.
+# This repository has already shipped an importer that returned nothing from a
+# real document while fourteen tests passed, so a check that reports on the
+# pull request itself is worth its forty seconds.
+#
+# Deliberately not part of pages.yml: that workflow holds `pages: write` and
+# `id-token: write` and ends in a deploy. A pull request has no business
+# running with those.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push supersedes the run it interrupted; nothing here is worth
+# finishing for a commit that has already been replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Every line package.json claims to support, with nothing asserted that a
+    # job does not run: the 22 floor exactly, the latest 22.x, and 24. The
+    # floor was wrong for months — `>=22.6`, which cannot run an unflagged .ts
+    # file — precisely because nothing ever ran on it. A claim no job tests is
+    # a guess, so the range and this matrix are meant to be changed together.
+    #
+    # 22.18.0 is pinned rather than floated because it is the boundary itself:
+    # the release that unflagged type stripping on the 22 line. `22` floats on
+    # purpose, since that is what somebody installing Node 22 today gets.
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.18.0', '22', '24']
+    name: test (node ${{ matrix.node }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
