@@ -171,8 +171,9 @@ export function routeSvg(places: Place[], highlight?: number): string {
 
 function figure(photo: Photo | undefined, place: Place | undefined, city: string): string {
   if (!photo) return ''
-  // A caption may only claim what can be checked. `atmosphere` means the match
-  // was never verified, so the picture is honest about being of the city.
+  // A caption may only claim what can be checked. Only a person can earn a
+  // name — their own photograph, or one they chose having looked at it — so
+  // everything found by searching is captioned as the city, which it is.
   const caption = photo.claim === 'named' && place ? place.name : city
   const credit = photo.credit
     ? `Photo by <a href="${escapeHtml(photo.credit.link)}?utm_source=cicerone&amp;utm_medium=referral">${escapeHtml(photo.credit.name)}</a> on <a href="https://unsplash.com/?utm_source=cicerone&amp;utm_medium=referral">Unsplash</a>`
@@ -230,8 +231,22 @@ function renderPassage({ passage, offset }: Numbered): string {
   return `${body}${computed}`
 }
 
+/**
+ * A stop, or nothing.
+ *
+ * Nothing is the common case. The rule that matters is the one about what
+ * counts as something: a computed light passage rides along with research, it
+ * does not justify an entry on its own. Without that, every stop on the trip
+ * rendered — thirty-three headings each followed by one line of golden hour,
+ * several of them identical, which is the padding this whole design refuses
+ * arriving through the back door.
+ *
+ * A photograph is enough on its own, because a chapter opener is a deliberate
+ * element rather than an accident of having computed something.
+ */
 function renderPlace(place: Place, passages: Numbered[], photo: Photo | undefined, city: string): string {
-  if (passages.length === 0 && !photo) return ''
+  const researched = passages.some((n) => !n.passage.computed)
+  if (!researched && !photo) return ''
 
   const lead = passages[0]?.passage
   return `<section class="entry" id="place-${escapeHtml(place.id)}">
@@ -302,8 +317,15 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
     const corridors = opts.corridors.filter((c) => c.dayIndex === dayIndex)
     const parts: string[] = []
 
+    // The day's photograph belongs to the chapter, not to whichever stop
+    // happens to be first. Rendered inside the stop it put a picture of Prague
+    // under a heading that said "Václav Havel Airport".
+    const opener = stops[0]
+    const chapterPhoto = opener ? photos.get(`place:${opener.id}`) : undefined
+
     for (const place of stops) {
-      parts.push(renderPlace(place, numbered.get(`place:${place.id}`) ?? [], photos.get(`place:${place.id}`), city))
+      const own = place === opener ? undefined : photos.get(`place:${place.id}`)
+      parts.push(renderPlace(place, numbered.get(`place:${place.id}`) ?? [], own, city))
       const onward = corridors.find((c) => c.fromPlaceId === place.id)
       if (onward) {
         const from = places.get(onward.fromPlaceId)
@@ -341,6 +363,7 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
 <div><div class="figure-n">${corridors.length}</div><div class="figure-l">Corridors</div></div>
 </div>
 </div>
+${figure(chapterPhoto, undefined, city)}
 ${
       stops.length > 1
         ? `<div class="route">${routeSvg(stops)}

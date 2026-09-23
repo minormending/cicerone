@@ -101,6 +101,22 @@ test('a computed passage says it needs no source', () => {
   assert.ok(html.includes('no source needed'))
 })
 
+test('a computed passage does not justify a stop on its own', () => {
+  // Thirty-three headings each followed by one line of golden hour, several of
+  // them identical. The padding this design refuses, arriving through the back
+  // door of having computed something.
+  const html = renderBook(
+    TRIP,
+    guide([
+      passage({ id: 'o', body: 'A real passage about the cathedral and who paid for it.' }),
+      passage({ id: 'l', kind: 'look_for', computed: true, subject: { kind: 'place', id: 'stern' }, body: 'Lit late.' }),
+    ]),
+    { corridors: [] },
+  )
+  assert.ok(html.includes('id="place-vitus"'))
+  assert.ok(!html.includes('id="place-stern"'), 'nothing was written about it')
+})
+
 test('a computed passage does not justify a chapter on its own', () => {
   // Day one of the real Prague trip was an airport with a golden-hour note
   // against it and nothing else. That is a page of padding wearing a
@@ -192,21 +208,34 @@ test('one stop draws no route', () => {
   assert.equal(routeSvg([place('a', 'A')]), '')
 })
 
-test('a photograph is captioned by name only when it was verified', () => {
-  const named = renderBook(
+test("the day's photograph opens the chapter, not the first stop", () => {
+  // Rendered inside the stop it put a picture of Prague under a heading that
+  // said "Václav Havel Airport".
+  const html = renderBook(
     TRIP,
-    guide([passage()], [{ subject: { kind: 'place', id: 'vitus' }, url: 'u', claim: 'named', chosenBy: 'auto' }]),
+    guide(
+      [passage({ subject: { kind: 'place', id: 'stern' }, body: 'Something real about the palace here.' })],
+      [{ subject: { kind: 'place', id: 'vitus' }, url: 'u', claim: 'atmosphere', chosenBy: 'auto' }],
+    ),
     { corridors: [], city: 'Prague' },
   )
-  assert.ok(named.includes('St. Vitus Cathedral &middot;'))
+  assert.ok(html.indexOf('<figure>') < html.indexOf('class="route"'), 'above the route strip')
+  assert.ok(html.indexOf('<figure>') < html.indexOf('id="place-stern"'), 'and above every stop')
+  assert.ok(!html.includes('id="place-vitus"'), 'the opener itself had nothing written about it')
+})
 
-  const loose = renderBook(
+test('a photograph found by searching is captioned as the city', () => {
+  // Only a person earns a name. Everything automatic is atmosphere.
+  const html = renderBook(
     TRIP,
-    guide([passage()], [{ subject: { kind: 'place', id: 'vitus' }, url: 'u', claim: 'atmosphere', chosenBy: 'auto' }]),
+    guide(
+      [passage()],
+      [{ subject: { kind: 'place', id: 'vitus' }, url: 'u', claim: 'atmosphere', chosenBy: 'auto' }],
+    ),
     { corridors: [], city: 'Prague' },
   )
-  assert.ok(loose.includes('Prague &middot;'))
-  assert.ok(!loose.includes('St. Vitus Cathedral &middot;'))
+  assert.ok(html.includes('Prague &middot;'))
+  assert.ok(!html.includes('St. Vitus Cathedral &middot;'))
 })
 
 test('a photograph carries its credit and a swap control', () => {
