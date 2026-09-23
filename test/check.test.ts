@@ -183,3 +183,39 @@ test('a guide with no passages still reports its shape', () => {
   assert.equal(result.coverage.corridors, 1)
   assert.equal(result.coverage.passages, 0)
 })
+
+test('a claim is a span within a sentence, not the whole of it', () => {
+  // The real guide's first passage was refused by a check reading this
+  // backwards: its claim quoted exactly the half that needed holding up.
+  const body = 'Charles IV laid the first stone in 1344 and did not remotely expect to see it finished.'
+  const result = checkGuide(
+    input([
+      passage({
+        body,
+        sources: [SOURCE],
+        claims: [{ text: 'Charles IV laid the first stone in 1344', source: 0 }],
+      }),
+    ]),
+  )
+  assert.equal(result.ok, true, JSON.stringify(result.faults))
+})
+
+test('a computed passage may be one line, because that is what it is', () => {
+  const result = checkGuide(
+    input([passage({ kind: 'look_for', computed: true, body: 'Low warm light 17:32–18:32.' })]),
+  )
+  assert.equal(result.ok, true)
+})
+
+test('coverage counts research, not the light every place gets for free', () => {
+  // Counting computed passages made a trip with one written stop report 33 of
+  // 33 — a number that could never fall below perfect.
+  const result = checkGuide(
+    input([
+      passage({ id: 'r', body: 'A real passage about the cathedral and who paid for it.' }),
+      passage({ id: 'l1', kind: 'look_for', computed: true, subject: { kind: 'place', id: 'stern' }, body: 'Lit late.' }),
+    ]),
+  )
+  assert.equal(result.coverage.placesWritten, 1, 'one researched, not two')
+  assert.equal(result.coverage.places, 2)
+})

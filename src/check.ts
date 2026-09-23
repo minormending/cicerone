@@ -76,7 +76,11 @@ export function checkGuide(input: CheckInput): CheckResult {
     seen.add(key)
 
     if (!passage.title.trim()) at('no-title', 'a passage needs a title a reader would recognise')
-    if (passage.body.trim().length < 40) at('too-short', 'a passage is prose, not a field')
+    // A computed passage is one line of fact — "Low warm light 17:32–18:32."
+    // — and is meant to be. The floor is for catching stubs of prose.
+    if (!passage.computed && passage.body.trim().length < 40) {
+      at('too-short', 'a passage is prose, not a field')
+    }
 
     // Every claim points at a source that exists, and quotes the body.
     for (const claim of passage.claims) {
@@ -97,11 +101,14 @@ export function checkGuide(input: CheckInput): CheckResult {
     // it is cut. A computed passage is exempt — nothing was retrieved because
     // nothing needed to be.
     if (!passage.computed) {
-      const covered = passage.claims.map((c) => c.text).join(' ')
       for (const sentence of sentences(passage.body)) {
-        if (SPECIFIC.test(sentence) && !covered.includes(sentence.trim())) {
-          at('unsourced-specific', `"${truncate(sentence)}" states a specific with no claim behind it`)
-        }
+        if (!SPECIFIC.test(sentence)) continue
+        // A claim is a span *within* a sentence, not the whole of it. Reading
+        // it the other way round refused "Charles IV laid the first stone in
+        // 1344 and did not expect to see it finished" while its claim quoted
+        // exactly the half that needed holding up.
+        const held = passage.claims.some((claim) => sentence.includes(claim.text.trim()))
+        if (!held) at('unsourced-specific', `"${truncate(sentence)}" states a specific with no claim behind it`)
       }
     }
 
@@ -114,9 +121,12 @@ export function checkGuide(input: CheckInput): CheckResult {
 }
 
 function coverageOf(trip: Trip, corridors: Corridor[], guide: Guide): Coverage {
-  const written = new Set(guide.passages.map((p) => `${p.subject.kind}:${p.subject.id}`))
-  const scheduled = trip.places.filter((p: Place) => p.dayIndex !== undefined)
   const researched = guide.passages.filter((p) => !p.computed)
+  // Counted from researched passages only. Every place gets a computed light
+  // passage, so counting those made a trip with one written stop report 33 of
+  // 33 — a coverage number that could never fall below perfect.
+  const written = new Set(researched.map((p) => `${p.subject.kind}:${p.subject.id}`))
+  const scheduled = trip.places.filter((p: Place) => p.dayIndex !== undefined)
 
   return {
     places: scheduled.length,

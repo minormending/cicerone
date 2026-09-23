@@ -36,6 +36,7 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone trip <id>               the trip graph and its corridors, as JSON
   cicerone save <id> <file.json>   check a guide, then write it
   cicerone check <id> [file.json]  check without writing
+  cicerone check --trip <trip.json> <passages.json>   check with no database
   cicerone import <wanderlog-key>  fetch a trip and store it
   cicerone photos <id>             find and store a photograph per subject
 
@@ -172,6 +173,29 @@ async function main(): Promise<void> {
     const saved = await store.getTrip(id)
     if (!saved) die(`No trip ${id}.`)
     console.log(JSON.stringify(brief(saved.graph), null, 2))
+    return
+  }
+
+  // Offline check: no database, no session, no network. The routine iterates
+  // against this while it writes, and anybody can run it over a pair of files.
+  if (command === 'check' && rest[0] === '--trip') {
+    const tripFile = rest[1]
+    const passageFile = rest[2]
+    if (!tripFile || !passageFile) die('cicerone check --trip <trip.json> <passages.json>')
+
+    let graph: Trip
+    try {
+      const parsed = JSON.parse(readFileSync(tripFile, 'utf8')) as Trip | { graph: Trip }
+      graph = 'graph' in parsed ? parsed.graph : parsed
+    } catch (err) {
+      die(`Could not read ${tripFile}: ${(err as Error).message}`)
+    }
+
+    const withL = withLegs(graph)
+    const guide = readGuide(passageFile, withL, graph.id)
+    const result = checkGuide({ trip: withL, corridors: corridorsOf(withL), guide })
+    report(result)
+    if (!result.ok) die(`\n${result.faults.length} fault(s).`)
     return
   }
 
