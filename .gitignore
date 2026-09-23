@@ -7,3 +7,4 @@ dist/
 # Written by the Supabase CLI: the linked project ref and a version marker.
 supabase/.temp/
 .probe/
+prague-guide.html
