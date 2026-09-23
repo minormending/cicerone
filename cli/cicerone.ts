@@ -36,7 +36,8 @@ import { imageUrl, researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
 import { escapeHtml, renderBook } from '../src/render/book.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
-import { readToken, TOKEN_PATH, writeToken } from '../src/backend/session.ts'
+import { MAP_JS } from '../src/render/maps.ts'
+import { readSession, stillValid, TOKEN_PATH, writeSession, writeToken } from '../src/backend/session.ts'
 import type { Coordinates, Corridor, Guide, Passage, TransportMode, Trip } from '../src/domain/types.ts'
 
 const USAGE = `cicerone — the seam between the routine and the database
@@ -89,11 +90,11 @@ async function connect(): Promise<Store> {
   // them.
   const url = process.env['PUBLIC_SUPABASE_URL'] ?? process.env['SUPABASE_URL']
   const anonKey = process.env['PUBLIC_SUPABASE_ANON_KEY'] ?? process.env['SUPABASE_ANON_KEY']
-  const refreshToken = readToken()
+  const saved = readSession()
   if (!url || !anonKey) {
     die('No project configured. Set PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY, or put them in .env.')
   }
-  if (!refreshToken) {
+  if (!saved) {
     die(
       `No session. Sign in at the site, press "Copy token for the routine",\n` +
         `then run:  npm run cicerone login <paste>\n\n` +
@@ -105,15 +106,30 @@ async function connect(): Promise<Store> {
     auth: { persistSession: false, autoRefreshToken: false },
     db: { schema: 'cicerone' },
   })
-  const { data, error } = await db.auth.refreshSession({ refresh_token: refreshToken })
-  if (error || !data.user) {
+
+  // The access token lasts about an hour. While it does, the refresh chain is
+  // left alone entirely — which is the whole point, because every refresh
+  // retires a token and every retired token is a chance to lose the chain.
+  if (stillValid(saved)) {
+    const { data, error } = await db.auth.setSession({
+      access_token: saved.accessToken as string,
+      refresh_token: saved.refreshToken,
+    })
+    if (!error && data.user) return new Store(db, data.user.id)
+    // Fall through and refresh: an access token can be revoked early.
+  }
+
+  const { data, error } = await db.auth.refreshSession({ refresh_token: saved.refreshToken })
+  if (error || !data.user || !data.session) {
     console.error(`Could not sign in: ${error?.message ?? 'no session'}`)
     die('That token has been retired. Copy a fresh one and run `cicerone login`.')
   }
 
-  // The token just used is now spent. Saving its replacement is what keeps the
-  // routine signed in without anybody going back to the web app.
-  if (data.session?.refresh_token) writeToken(data.session.refresh_token)
+  writeSession({
+    refreshToken: data.session.refresh_token,
+    accessToken: data.session.access_token,
+    ...(data.session.expires_at ? { expiresAt: data.session.expires_at } : {}),
+  })
   return new Store(db, data.user.id)
 }
 
@@ -230,6 +246,10 @@ const FONTS =
  *
  * The swap control is hidden, because there is nothing behind it outside the
  * app — a button that does nothing is worse than no button.
+ *
+ * The map script is inlined for the same reason the stylesheet is, and it is
+ * the only thing in here that wants the network. It degrades to the drawn
+ * route, so a file opened on a plane is whole.
  */
 function page(title: string, body: string): string {
   return `<!doctype html>
@@ -246,6 +266,7 @@ function page(title: string, body: string): string {
 </head>
 <body data-claims="on">
 ${body}
+<script>${MAP_JS}</script>
 </body>
 </html>
 `
