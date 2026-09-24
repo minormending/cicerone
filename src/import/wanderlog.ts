@@ -1,5 +1,6 @@
 import { timezoneForCountry } from '../geo/timezones.ts'
-import type { Coordinates, Flight, FlightEnd, Place, Stay, TransportMode, Trip } from '../domain/types.ts'
+import type { Coordinates, Flight, FlightEnd, Place, RouteFact, Stay, TransportMode, Trip } from '../domain/types.ts'
+import { decodePolyline } from '../geo/polyline.ts'
 
 /**
  * Maps a Wanderlog trip document into a trip graph.
@@ -483,6 +484,96 @@ function unwrap(document: unknown): Record<string, unknown> {
   return document
 }
 
+
+/**
+ * Google's travel modes as the document writes them, in ours.
+ *
+ * A mode outside this list means a route we have no name for, and a route we
+ * have no name for cannot be matched against a leg's mode — which is the only
+ * thing standing between a tram line and a paragraph about a walk. So it is
+ * dropped rather than guessed at.
+ */
+const DOCUMENT_MODE: Record<string, TransportMode> = {
+  walking: 'walk',
+  transit: 'transit',
+  driving: 'drive',
+  bicycling: 'cycle',
+}
+
+/**
+ * The routes the document already carries.
+ *
+ * `resources.distancesBetweenPlaces` is keyed by a JSON array written as a
+ * string — `["ChIJ...","ChIJ...","walking"]` — and holds, for each pair the
+ * planner has looked at, the distance, the duration and Google's encoded
+ * polyline for the actual route. Every corridor of a fully planned trip is in
+ * there, which means the real line down the real street is in the file we
+ * already download and nothing needs to be fetched or derived to draw it.
+ *
+ * Two traps, both of them found by reading the data rather than the field
+ * names. The field actually called `stopPolylines` is an empty object, the
+ * same way `flightUpdates` was empty on the first share key — the name is not
+ * where the data is. And the `text` on a distance is rendered for the account
+ * that owns the trip, so a European itinerary comes back with `0.33 mi` next
+ * to `15.1 km` in the same document. Only `value` is read, which is metres
+ * and seconds regardless.
+ */
+export function routesFrom(document: unknown): Record<string, RouteFact> {
+  // `resources` is a sibling of `tripPlan`, not a child of it, so this reads
+  // the raw document first and the unwrapped one only as a fallback. Going
+  // through `unwrap` alone found nothing at all and reported a clean zero,
+  // which is the quietest possible way for an importer to be broken.
+  const table = [document, unwrap(document)]
+    .map((level) => (isRecord(level) && isRecord(level['resources']) ? level['resources'] : undefined))
+    .map((resources) =>
+      resources && isRecord(resources['distancesBetweenPlaces'])
+        ? resources['distancesBetweenPlaces']
+        : undefined,
+    )
+    .find(Boolean)
+  if (!table) return {}
+
+  const out: Record<string, RouteFact> = {}
+  for (const [key, entry] of Object.entries(table)) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(key)
+    } catch {
+      continue
+    }
+    if (!Array.isArray(parsed) || parsed.length < 3) continue
+    const [from, to, stated] = parsed as unknown[]
+    if (typeof from !== 'string' || typeof to !== 'string' || typeof stated !== 'string') continue
+    const mode = DOCUMENT_MODE[stated]
+    if (!mode) continue
+
+    if (!isRecord(entry)) continue
+    const route = entry['route']
+    if (!isRecord(route)) continue
+    const encoded = route['polyline']
+    if (typeof encoded !== 'string' || !encoded) continue
+
+    const path = decodePolyline(encoded)
+    // Two points is the least that is a line. One is a rounding artefact and
+    // none is a polyline that did not decode.
+    if (path.length < 2) continue
+
+    const metres = numberIn(route['distance'])
+    const seconds = numberIn(route['duration'])
+    if (metres === undefined || seconds === undefined) continue
+
+    out[`${from}>${to}`] = { metres, seconds, path, mode }
+  }
+  return out
+}
+
+/** `{value, text}` as Google writes a measurement. Only the value is trusted. */
+function numberIn(value: unknown): number | undefined {
+  if (!isRecord(value)) return undefined
+  const n = value['value']
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : undefined
+}
+
 export function tripFromWanderlog(
   document: unknown,
   opts: { id?: string; title?: string; departsOn?: string } = {},
@@ -600,6 +691,8 @@ export function tripFromWanderlog(
   if (flights.length > 0) trip.flights = flights
   const stays = staysFrom(document)
   if (stays.length > 0) trip.stays = stays
+  const routes = routesFrom(document)
+  if (Object.keys(routes).length > 0) trip.routes = routes
   return { trip, report }
 }
 

@@ -56,8 +56,8 @@ export const MAP_JS = `
     return loading;
   }
 
-  function routeOf(host) {
-    var raw = host.getAttribute('data-route');
+  function pointsIn(host, attribute) {
+    var raw = host.getAttribute(attribute);
     if (!raw) return null;
     try {
       var parsed = JSON.parse(raw);
@@ -67,7 +67,19 @@ export const MAP_JS = `
     }
   }
 
-  function draw(host, route) {
+  function routeOf(host) {
+    return pointsIn(host, 'data-route');
+  }
+
+  /* The line, where the import knew it: the planner's own route, following
+     streets. Absent on a day nothing was routed for, and then the line falls
+     back to joining the stops, which is what it always did. */
+  function pathOf(host) {
+    return pointsIn(host, 'data-path');
+  }
+
+  function draw(host, route, path) {
+    var line = path || route;
     var canvas = document.createElement('div');
     canvas.className = 'route-map';
     /* Before the foot, not after it. The chapter's link to the whole day in
@@ -88,7 +100,10 @@ export const MAP_JS = `
 
     map.on('load', function () {
       var bounds = new maplibregl.LngLatBounds();
-      for (var i = 0; i < route.length; i++) bounds.extend(route[i]);
+      /* Over the line, not the stops: a route that swings around a park goes
+         further than either end of it, and fitting the stops alone crops the
+         walk you are being shown. */
+      for (var i = 0; i < line.length; i++) bounds.extend(line[i]);
       /* maxZoom matters for the days that barely move: two stops on the same
          square would otherwise fill the frame with one building. */
       map.fitBounds(bounds, { padding: 46, duration: 0, maxZoom: 15.5 });
@@ -101,7 +116,7 @@ export const MAP_JS = `
         data: {
           type: 'Feature',
           properties: {},
-          geometry: { type: 'LineString', coordinates: route }
+          geometry: { type: 'LineString', coordinates: line }
         }
       });
       map.addLayer({
@@ -169,7 +184,7 @@ export const MAP_JS = `
       if (!ready) return;
       hosts.forEach(function (host) {
         var route = routeOf(host);
-        if (route) draw(host, route);
+        if (route) draw(host, route, pathOf(host));
       });
     });
   }

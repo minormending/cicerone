@@ -287,6 +287,15 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
 /* Pushed to the far end of the head so it reads as an action rather than
    another piece of the label. */
 .corridor-head .directions { flex: 0 0 auto; margin-left: auto; margin-top: -6px; }
+/* How far and how long, in the same small caps as the route it belongs to but
+   a shade darker, because it is the one thing in the row a reader looks up
+   deliberately. Never shrinks: "750 m" is six characters and the names beside
+   it have a hundred to give. */
+.corridor-cost {
+  flex: 0 0 auto;
+  font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
+}
 /* The head is capped at the body's measure so the button's right edge lands
    on the same vertical as the prose beneath it. Uncapped it overhung by
    sixteen pixels, which is exactly far enough to look like a mistake.
@@ -374,6 +383,10 @@ body[data-claims='off'] .claim { display: none; }
      would sit alone against the edge with nothing to hold it. */
   .corridor-head { flex-wrap: wrap; }
   .corridor-route { flex-basis: 100%; }
+  /* Its own row under the names. No reordering: the DOM already has it
+     between the route and the button, and moving one of three items would
+     have put the button in front of it. */
+  .corridor-cost { flex-basis: 100%; }
   /* With the route on its own line the dot separates nothing, and a dot
      separating nothing is just a mark on the page. */
   .corridor-head .dot { display: none; }

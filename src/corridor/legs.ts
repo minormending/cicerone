@@ -130,7 +130,39 @@ export function inferLegs(places: Place[]): Leg[] {
   return legs
 }
 
-/** The trip with its legs filled in. */
+/** The trip with its legs filled in, and the planner's routes back on them. */
 export function withLegs(trip: Trip): Trip {
-  return { ...trip, legs: inferLegs(trip.places) }
+  return { ...trip, legs: withRoutes(inferLegs(trip.places), trip) }
+}
+
+/**
+ * Put the document's own routes back onto the legs we just derived.
+ *
+ * Only where the modes agree, and that condition is the whole of the design
+ * rather than a caveat on it. A route is a line drawn for one mode: the tram
+ * from Národní up into Vinohrady and the walk between the same two points are
+ * different lines, tens of metres apart for most of their length and on
+ * different streets for some of it. Drawing the tram under a heading that
+ * says WALK would be wrong in the one way a reader has no way to catch, so a
+ * disagreement costs the leg its line rather than its honesty.
+ *
+ * On the trip this was built for, twenty-seven of twenty-eight agree. The one
+ * that does not is a two-and-a-half kilometre hop that `inferMode` calls a
+ * walk on straight-line distance and the planner routed as transit — and
+ * since both are guesses rather than anything the traveller said, neither one
+ * gets to overrule the other. It keeps its straight line, and says nothing.
+ */
+export function withRoutes(legs: Leg[], trip: Trip): Leg[] {
+  const routes = trip.routes
+  if (!routes) return legs
+  const places = new Map(trip.places.map((p) => [p.id, p]))
+
+  return legs.map((leg) => {
+    const from = places.get(leg.fromPlaceId)?.placeId
+    const to = places.get(leg.toPlaceId)?.placeId
+    if (!from || !to) return leg
+    const route = routes[`${from}>${to}`]
+    if (!route || route.mode !== leg.mode) return leg
+    return { ...leg, route }
+  })
 }

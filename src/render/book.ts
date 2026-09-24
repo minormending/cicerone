@@ -1,6 +1,6 @@
-import type { Corridor, Flight, Guide, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
+import type { Corridor, Coordinates, Flight, Guide, Leg, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
-import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
+import { metresBetween } from '../corridor/legs.ts'
 import { dayDirectionsUrl, directionsLabel, directionsUrl } from './directions.ts'
 
 /**
@@ -58,6 +58,26 @@ function subjectKey(subject: Subject): string {
   return `${subject.kind}:${subject.id}`
 }
 
+/**
+ * The stops of each day, in the order the traveller arranged them.
+ *
+ * The document's order, deliberately, and not sorted by the clock. Sorting
+ * looked safer and was wrong, and it took a routed line on a map to show it:
+ * most stops on a real itinerary carry no arrival time at all, a sort sends
+ * every one of them to the end of the day, and day two of this trip read
+ * Lokál at half past seven, then the hotel, then Old Town Square, then the
+ * Klementinum, then the bridge. Four stops in the wrong half of the evening.
+ *
+ * Worse than the stops being out of order, the corridors were not. They are
+ * placed after the stop they leave from, and they come from `inferLegs`,
+ * which has always used the document's order — so the chapter was announcing
+ * a walk from Mr. Banh Mi to Old Town Square and then showing the
+ * Astronomical Clock. The two orders have to be one order, and the document's
+ * is the one that is also the itinerary.
+ *
+ * It is invisible on a day where every stop has a time, which is why three of
+ * this trip's five days were unaffected and nobody caught it.
+ */
 function byDay(trip: Trip): Map<number, Place[]> {
   const days = new Map<number, Place[]>()
   for (const place of trip.places) {
@@ -65,9 +85,6 @@ function byDay(trip: Trip): Map<number, Place[]> {
     const list = days.get(place.dayIndex) ?? []
     list.push(place)
     days.set(place.dayIndex, list)
-  }
-  for (const list of days.values()) {
-    list.sort((a, b) => (minutesOfDay(a.arrive) ?? 1e9) - (minutesOfDay(b.arrive) ?? 1e9))
   }
   return days
 }
@@ -339,13 +356,68 @@ const MAP_MAX_H = 520
  * happened to be above it, which was none of them. The stops are named in the
  * chapter below in the order you visit them.
  */
-export function routeSvg(places: Place[]): string {
-  const points = mapPoints(places).map((p) => p.coords)
+/**
+ * The day as a list of legs, each one a line of its own.
+ *
+ * A leg is the planner's polyline where the document carried one and its mode
+ * agreed with ours, and the straight line between the two stops where it did
+ * not — so a day never has a gap in it, whatever the import knew. The pairs
+ * come from the stops that survived `mapPoints`, which means a transfer that
+ * was dropped from the frame takes its twelve-kilometre line with it instead
+ * of dragging the whole map out to the airport.
+ */
+interface Segment {
+  points: Coordinates[]
+  /** False for a straight line standing in for a route nobody has. */
+  routed: boolean
+}
+
+function legSegments(stops: Place[], legs: Leg[]): Segment[] {
+  const out: Segment[] = []
+  for (let i = 0; i + 1 < stops.length; i++) {
+    const from = stops[i] as Place
+    const to = stops[i + 1] as Place
+    const leg = legs.find((l) => l.fromPlaceId === from.id && l.toPlaceId === to.id)
+    const path = leg?.route?.path
+    out.push(
+      path && path.length >= 2
+        ? { points: path, routed: true }
+        : { points: [from.coords, to.coords], routed: false },
+    )
+  }
+  return out
+}
+
+export function routeSvg(places: Place[], legs: Leg[] = []): string {
+  const stops = mapPoints(places)
+  const points = stops.map((p) => p.coords)
   if (points.length < 2) return ''
 
-  const meanLat = points.reduce((n, p) => n + p.lat, 0) / points.length
+  // One polyline per leg: the planner's own, where the document carried one
+  // and its mode agreed, and the straight line between the two stops where it
+  // did not. Both kinds draw identically, so a day with one unrouted leg is
+  // one slightly straighter stretch rather than a different kind of picture.
+  const segments = legSegments(stops, legs)
+  const all = segments.flatMap((segment) => segment.points)
+  /*
+   * A leg we have no route for is drawn dotted — but only on a day where the
+   * others are routed.
+   *
+   * Straightness used to mean nothing here: every leg was a straight line and
+   * the drawing read as a schematic. Once four legs bend around corners and
+   * one cuts diagonally across the frame, that one looks like a bug in the
+   * renderer rather than a gap in what the import knew. Dotted says the true
+   * thing: this is the way there, and this part of it is a guess.
+   *
+   * On a trip with no routed legs at all nothing is dotted, because then
+   * straight is the convention again and every leg is keeping the same
+   * honest silence.
+   */
+  const someRouted = segments.some((segment) => segment.routed)
+
+  const meanLat = all.reduce((n, p) => n + p.lat, 0) / all.length
   const k = Math.cos((meanLat * Math.PI) / 180)
-  const raw = points.map((p) => ({ x: p.lon * k, y: -p.lat }))
+  const raw = all.map((p) => ({ x: p.lon * k, y: -p.lat }))
 
   const xs = raw.map((p) => p.x)
   const ys = raw.map((p) => p.y)
@@ -370,26 +442,32 @@ export function routeSvg(places: Place[]): string {
   const midX = (Math.max(...xs) + Math.min(...xs)) / 2
   const midY = (Math.max(...ys) + Math.min(...ys)) / 2
 
-  const xy = raw.map((p) => ({
-    x: MAP_W / 2 + (p.x - midX) * scale,
-    y: mapH / 2 + (p.y - midY) * scale,
-  }))
+  const project = (p: Coordinates) => ({
+    x: MAP_W / 2 + (p.lon * k - midX) * scale,
+    y: mapH / 2 + (-p.lat - midY) * scale,
+  })
 
   // One path per leg, so each can carry its own opacity. The round caps of two
   // neighbouring legs overlap at the stop between them, and every stop has a
   // dot drawn over it, so the join never shows.
-  const last = xy.length - 1
-  const legs: string[] = []
-  for (let i = 1; i <= last; i++) {
-    const from = xy[i - 1]
-    const to = xy[i]
-    if (!from || !to) continue
-    const d = `M${from.x.toFixed(1)} ${from.y.toFixed(1)} L${to.x.toFixed(1)} ${to.y.toFixed(1)}`
-    legs.push(
-      `<path d="${d}" opacity="${fade((i - 0.5) / last, LINE_FROM, LINE_TO)}"></path>`,
+  const last = segments.length
+  const drawn: string[] = []
+  segments.forEach((segment, i) => {
+    const d = segment.points
+      .map((p, n) => {
+        const { x, y } = project(p)
+        return `${n === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
+      })
+      .join(' ')
+    // Round caps turn a near-zero dash into a dot, so the gap is the whole
+    // measurement and the line reads as a row of beads rather than a fence.
+    const dots = someRouted && !segment.routed ? ' stroke-dasharray="0.1 10"' : ''
+    drawn.push(
+      `<path d="${d}" opacity="${fade((i + 0.5) / last, LINE_FROM, LINE_TO)}"${dots}></path>`,
     )
-  }
+  })
 
+  const xy = points.map(project)
   const dots = xy
     .map((p, i) =>
       i === 0
@@ -403,7 +481,7 @@ export function routeSvg(places: Place[]): string {
     .join('')
 
   return `<svg viewBox="0 0 ${MAP_W} ${mapH}" role="img" aria-label="The shape of the day on foot, ${points.length} stops, fading from the first to the last">
-<g fill="none" stroke="var(--coral)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${legs.join('')}</g>
+<g fill="none" stroke="var(--coral)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${drawn.join('')}</g>
 <g fill="var(--paper)" stroke="var(--coral)" stroke-width="3.5">${dots}</g>
 </svg>`
 }
@@ -422,11 +500,45 @@ export function routeData(places: Place[]): string {
   return JSON.stringify(points.map((p) => [Number(p.lon.toFixed(5)), Number(p.lat.toFixed(5))]))
 }
 
+/**
+ * The same line the drawing draws, for the real map to take over.
+ *
+ * Separate from `routeData`, which is the stops: the map puts a ring on each
+ * stop and a line along the route, and once the line follows streets those
+ * are no longer the same list of points. Emitted as flat pairs rather than
+ * objects because it is an attribute in a file somebody emails — a thousand
+ * points as `{"lat":…,"lon":…}` is three times the bytes of the same thousand
+ * as `[lon,lat]`, for a rendering detail nothing reads twice.
+ *
+ * Empty when no leg of the day carried a route, so the map falls back to
+ * joining the stops and the page is exactly what it was before.
+ */
+export function pathData(places: Place[], legs: Leg[]): string {
+  const stops = mapPoints(places)
+  if (stops.length < 2) return ''
+  const routed = legSegments(stops, legs)
+  const anyReal = stops.some((from, i) => {
+    const to = stops[i + 1]
+    return to && legs.some((l) => l.fromPlaceId === from.id && l.toPlaceId === to.id && l.route)
+  })
+  if (!anyReal) return ''
+  // Flattened: the legs already meet at the stops between them, so the joins
+  // need no help, and one LineString is what the gradient runs along.
+  const flat: Array<[number, number]> = []
+  for (const segment of routed) {
+    for (const point of segment.points) flat.push([point.lon, point.lat])
+  }
+  return JSON.stringify(flat)
+}
+
 /** The block a chapter opens with: the drawing, and what a map needs to replace it. */
-function route(places: Place[], corridors: Corridor[]): string {
-  const svg = routeSvg(places)
+function route(places: Place[], corridors: Corridor[], legs: Leg[]): string {
+  const svg = routeSvg(places, legs)
   if (!svg) return ''
-  return `<div class="route" data-route="${escapeHtml(routeData(places))}">${svg}${dayRoute(places, corridors)}</div>`
+  const path = pathData(places, legs)
+  return `<div class="route" data-route="${escapeHtml(routeData(places))}"${
+    path ? ` data-path="${escapeHtml(path)}"` : ''
+  }>${svg}${dayRoute(places, corridors)}</div>`
 }
 
 /**
@@ -718,7 +830,46 @@ function directions(corridor: Corridor, from: Place, to: Place): string {
   )}" target="_blank" rel="noreferrer noopener">Directions<span class="arrow" aria-hidden="true">&#8599;</span></a>`
 }
 
-function renderCorridor(corridor: Corridor, from: Place, to: Place, passages: Numbered[]): string {
+/**
+ * How far and how long, as the planner already worked it out.
+ *
+ * Distance always; time only where time is a fact about walking rather than a
+ * fact about a timetable. Nine minutes between two stops in the Old Town is
+ * arithmetic on a distance and a human pace, and will be true next year. The
+ * forty-two minutes from the airport is a bus that runs every twenty minutes
+ * on a weekday, read on the day the trip was planned, and a book that prints
+ * it as though it were the same kind of number is making a promise it has no
+ * way to keep. So a transit corridor gets its distance and keeps quiet about
+ * the clock — the link in the same row answers that live.
+ */
+function cost(leg?: Leg): string {
+  const route = leg?.route
+  if (!route) return ''
+  const parts = [distanceText(route.metres)]
+  if (route.mode !== 'transit') parts.push(`${Math.max(1, Math.round(route.seconds / 60))} min`)
+  return `<span class="corridor-cost">${escapeHtml(parts.join(' \u00B7 '))}</span>`
+}
+
+/**
+ * Metric, and rounded to what a walk is actually accurate to.
+ *
+ * The document's own `text` is rendered for the account that owns the trip,
+ * which is imperial here, so a Prague itinerary comes back saying `0.38 mi`
+ * about a five-minute walk. The book speaks metres everywhere else and the
+ * trip is in Europe; only the raw value is read.
+ */
+function distanceText(metres: number): string {
+  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km`
+  return `${Math.max(10, Math.round(metres / 10) * 10)} m`
+}
+
+function renderCorridor(
+  corridor: Corridor,
+  from: Place,
+  to: Place,
+  passages: Numbered[],
+  leg?: Leg,
+): string {
   if (passages.length === 0) return ''
   const lead = passages[0]?.passage
   const mode = corridor.mode === 'walk' ? 'Walk' : corridor.mode
@@ -728,6 +879,7 @@ function renderCorridor(corridor: Corridor, from: Place, to: Place, passages: Nu
 <span class="label accent">${escapeHtml(lead ? KIND_LABEL[lead.kind] : 'Passing')}</span>
 <span class="dot"></span>
 <span class="corridor-route">${escapeHtml(mode)} &middot; ${escapeHtml(from.name)} &rarr; ${escapeHtml(to.name)}</span>
+${cost(leg)}
 ${directions(corridor, from, to)}
 </div>
 <div class="corridor-body">
@@ -789,7 +941,8 @@ export function renderBook(trip: Trip, guide: Guide, opts: BookOptions): string 
         const from = places.get(onward.fromPlaceId)
         const to = places.get(onward.toPlaceId)
         if (from && to) {
-          parts.push(renderCorridor(onward, from, to, numbered.get(`corridor:${onward.id}`) ?? []))
+          const leg = trip.legs.find((l) => l.id === onward.legId)
+          parts.push(renderCorridor(onward, from, to, numbered.get(`corridor:${onward.id}`) ?? [], leg))
         }
       }
     }
@@ -842,7 +995,7 @@ ${
 ${flightStrip(trip.flights, trip, dayIndex)}
 ${stayStrip(trip.stays, trip, dayIndex)}
 ${figure(chapterPhoto, undefined, city)}
-${route(stops, corridors)}
+${route(stops, corridors, trip.legs)}
 ${written.join('\n')}
 </section>`)
   }

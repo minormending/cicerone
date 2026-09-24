@@ -68,6 +68,35 @@ export interface Leg {
   /** Local wall clock at the departing end, `HH:MM`. */
   departAt?: string
   arriveAt?: string
+  /** The way there, as the traveller's own planner already worked it out. */
+  route?: RouteFact
+}
+
+/**
+ * A stretch of the journey as the planner that made the itinerary drew it.
+ *
+ * This is the one thing that lets a route onto the page without breaking the
+ * rule `src/corridor/legs.ts` sets out at length. Nothing here is computed:
+ * Wanderlog asked Google for these when the trip was planned and ships them
+ * inside the document, next to the coordinates and the opening hours, and
+ * reading one has exactly the same status as reading a stop's latitude. The
+ * app still owns no router, no geocoder and no opinion about which way the
+ * street runs.
+ *
+ * `mode` is not decoration. A route is only true of the mode it was asked
+ * for: the tram line between two stops and the walk between the same two
+ * stops are different lines on the ground, and drawing one under a heading
+ * that says the other is a lie a reader cannot catch. A route whose mode
+ * disagrees with the leg's is left unattached rather than drawn.
+ */
+export interface RouteFact {
+  /** Metres along the route, not across the map. */
+  metres: number
+  /** Seconds, as they stood on the day the trip was imported. */
+  seconds: number
+  /** The line itself, in order, at the planner's own resolution. */
+  path: Coordinates[]
+  mode: TransportMode
 }
 
 /**
@@ -141,6 +170,19 @@ export interface Trip {
   flights?: Flight[]
   /** Booked lodging, from the same section and the same switch. */
   stays?: Stay[]
+  /**
+   * Routes the document already carries, keyed `fromPlaceId>toPlaceId` on
+   * *Google's* ids and holding the document's own mode.
+   *
+   * Keyed that way, and kept on the trip rather than on the legs, because the
+   * legs are re-derived from the places on every read — `withLegs` builds
+   * them fresh — so anything stored on a leg is thrown away before it is ever
+   * seen. This is the document's index copied across intact; `withLegs`
+   * resolves it back onto the legs it just built, using the same two places
+   * it built each one from. Nothing has to agree about pairing for that to be
+   * right, which is the point.
+   */
+  routes?: Record<string, RouteFact>
 }
 
 /**

@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dateRange, dayTitle, escapeHtml, mapPoints, paragraphs, renderBook, routeSvg, shortName } from '../src/render/book.ts'
+import { dateRange, dayTitle, escapeHtml, mapPoints, paragraphs, pathData, renderBook, routeSvg, shortName } from '../src/render/book.ts'
 import { MAP_JS } from '../src/render/maps.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
-import type { Corridor, Guide, Passage, Photo, Place, Trip } from '../src/domain/types.ts'
+import type { Corridor, Guide, Leg, Passage, Photo, Place, Trip } from '../src/domain/types.ts'
 
 let nth = 0
 const place = (id: string, name: string, extra: Partial<Place> = {}): Place => ({
@@ -301,6 +301,121 @@ test('the real map mounts above the day link, not on top of it', () => {
   // link is unaffected.
   assert.match(MAP_JS, /insertBefore\([^)]*route-foot/)
   assert.ok(!/host\.appendChild\(canvas\)/.test(MAP_JS), 'not appended any more')
+})
+
+test('a chapter keeps the itinerary’s order, not the clock’s', () => {
+  // Most stops on a real itinerary carry no arrival time. Sorting by the
+  // clock sends every one of them to the end of the day, and the corridors —
+  // which come from the document's order and always have — stay where they
+  // were, so the chapter announces a walk to a stop it then does not show.
+  const stops = [
+    place('a', 'Bakery', { arrive: '09:00' }),
+    place('b', 'Square', { placeId: 'ChIJ_b' }),
+    place('c', 'Clock', { arrive: '12:00' }),
+  ]
+  const trip: Trip = { ...TRIP, places: stops, legs: [] }
+  const html = renderBook(
+    trip,
+    guide(stops.map((s, i) => passage({ id: `p${i}`, subject: { kind: 'place', id: s.id }, body: 'Built to out-face the palace opposite.' }))),
+    { corridors: [] },
+  )
+  const at = (id: string) => html.indexOf(`id="place-${id}"`)
+  assert.ok(at('a') > -1 && at('b') > -1 && at('c') > -1)
+  assert.ok(at('a') < at('b'), 'the untimed square keeps its place in the day')
+  assert.ok(at('b') < at('c'), 'and does not get flung past the stop after it')
+})
+
+/** The same legs with nothing routed, which exactOptionalPropertyTypes
+ *  makes a deletion rather than an undefined. */
+const unrouted = (legs: Leg[]): Leg[] =>
+  legs.map(({ route: _drop, ...rest }) => rest)
+
+/** Three stops; the first leg routed through a bend, the second not. */
+function routedDay() {
+  const stops = [
+    place('a', 'Bakery', { placeId: 'ChIJ_a' }),
+    place('b', 'Square', { placeId: 'ChIJ_b' }),
+    place('c', 'Clock', { placeId: 'ChIJ_c' }),
+  ]
+  const legs: Leg[] = [
+    {
+      id: 'leg:a:b',
+      fromPlaceId: 'a',
+      toPlaceId: 'b',
+      mode: 'walk',
+      route: {
+        metres: 612,
+        seconds: 480,
+        mode: 'walk',
+        path: [stops[0]!.coords, { lat: 50.0901, lon: 14.4233 }, stops[1]!.coords],
+      },
+    },
+    { id: 'leg:b:c', fromPlaceId: 'b', toPlaceId: 'c', mode: 'walk' },
+  ]
+  return { stops, legs }
+}
+
+test('the drawing follows the route the import knew', () => {
+  const { stops, legs } = routedDay()
+  const svg = routeSvg(stops, legs)
+  const paths = [...svg.matchAll(/<path d="([^"]*)"([^>]*)>/g)]
+  assert.equal(paths.length, 2, 'one path per leg, still')
+  // Three points on the routed leg, two on the one that fell back.
+  assert.equal((paths[0]![1]!.match(/[ML]/g) ?? []).length, 3)
+  assert.equal((paths[1]![1]!.match(/[ML]/g) ?? []).length, 2)
+})
+
+test('an unrouted leg is dotted only where its neighbours are drawn', () => {
+  // Straight used to mean nothing: every leg was straight. Once the others
+  // bend around corners, one diagonal looks like a bug in the renderer
+  // rather than a gap in what the import knew.
+  const { stops, legs } = routedDay()
+  const mixed = routeSvg(stops, legs)
+  assert.equal((mixed.match(/stroke-dasharray/g) ?? []).length, 1)
+
+  // With nothing routed, straight is the convention again and nothing is
+  // singled out.
+  const bare = routeSvg(stops, unrouted(legs))
+  assert.ok(!bare.includes('stroke-dasharray'))
+})
+
+test('the map is handed the route, and the stops separately', () => {
+  const { stops, legs } = routedDay()
+  const path = JSON.parse(pathData(stops, legs))
+  // Five points: three for the routed leg, two for the straight one, and the
+  // shared stop counted once in each.
+  assert.equal(path.length, 5)
+  assert.deepEqual(path[1], [14.4233, 50.0901], 'lon first, as GeoJSON wants')
+  // Nothing routed, nothing to say: the map falls back to joining the stops.
+  assert.equal(pathData(stops, unrouted(legs)), '')
+})
+
+test('a corridor says how far, and how long only when time means walking', () => {
+  const { stops, legs } = routedDay()
+  const corridor: Corridor = { ...CORRIDOR, id: 'c1', legId: 'leg:a:b', fromPlaceId: 'a', toPlaceId: 'b' }
+  const render = (mode: Leg['mode']) =>
+    renderBook(
+      { ...TRIP, places: stops, legs: legs.map((l) => (l.route ? { ...l, mode, route: { ...l.route, mode } } : l)) },
+      guide([
+        passage({ id: 'x', subject: { kind: 'place', id: 'a' }, body: 'Built to out-face the palace opposite.' }),
+        passage({
+          id: 'y',
+          kind: 'passing',
+          subject: { kind: 'corridor', id: 'c1' },
+          body: 'The square is not a square so much as a standoff.',
+        }),
+        passage({ id: 'z', subject: { kind: 'place', id: 'b' }, body: 'Built to out-face the palace opposite.' }),
+      ]),
+      { corridors: [{ ...corridor, mode }] },
+    )
+
+  // A middot, not an entity: escapeHtml only touches the five characters
+  // that change meaning in markup, and this is not one of them.
+  assert.match(render('walk'), /<span class="corridor-cost">610 m \u00B7 8 min<\/span>/)
+  // A walking minute is arithmetic on a pace. A transit minute is a timetable
+  // read on the day of the import, and the book will not print it as though
+  // the two were the same kind of number.
+  assert.match(render('transit'), /<span class="corridor-cost">610 m<\/span>/)
 })
 
 test('a day with nothing written is not a chapter', () => {
