@@ -136,6 +136,9 @@ a:hover { color: #8F2C24; }
 .route.has-map svg { display: none; }
 .route.has-map { padding: 10px; }
 .route .maplibregl-ctrl-attrib { font-family: var(--sans); font-size: 10px; }
+/* The whole day, under the map that draws it. Right-aligned, because the eye
+   leaves the drawing at the bottom and this is the next thing to offer it. */
+.route-foot { display: flex; justify-content: flex-end; padding-top: 14px; }
 
 /* A passage's own heading. Sans, so it reads as structure rather than as a
    louder sentence; well below the thirty-point stop name above it. */
@@ -267,12 +270,11 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
 .corridor-route { flex: 1 1 auto; min-width: 0;
   font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em; color: #6E6A5E;
   text-transform: uppercase; line-height: 1.5; }
-/* The way there, pushed to the far end of the head so it reads as an action
-   rather than another piece of the label. Coral, because it is the one thing
-   in a corridor a reader can click, and coral is what this book uses for the
-   trip's own things. */
-.corridor-head .directions {
-  flex: 0 0 auto; margin-left: auto; margin-top: -6px;
+/* The way there. Coral, because it is the only thing in this book a reader
+   can press, and coral is what the book uses for the trip's own things.
+   Shared by the corridor's link and the chapter's, which are the same offer
+   at two scales and should not be two different objects. */
+.directions {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
   color: var(--coral-ink); text-decoration: none;
@@ -280,8 +282,11 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
   background: rgba(251, 250, 247, 0.6);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.corridor-head .directions:hover { background: var(--paper); border-color: var(--coral); }
-.corridor-head .directions .arrow { font-size: 12px; line-height: 1; }
+.directions:hover { background: var(--paper); border-color: var(--coral); }
+.directions .arrow { font-size: 12px; line-height: 1; }
+/* Pushed to the far end of the head so it reads as an action rather than
+   another piece of the label. */
+.corridor-head .directions { flex: 0 0 auto; margin-left: auto; margin-top: -6px; }
 /* The head is capped at the body's measure so the button's right edge lands
    on the same vertical as the prose beneath it. Uncapped it overhung by
    sixteen pixels, which is exactly far enough to look like a mistake.
@@ -375,7 +380,10 @@ body[data-claims='off'] .claim { display: none; }
   /* Bigger than it needs to look, because this is the one control in the
      book and it gets pressed on a pavement, one-handed, walking. Thirty
      pixels is a comfortable click and an uncomfortable tap. */
-  .corridor-head .directions { margin-left: 0; margin-top: 0; padding: 12px 16px; }
+  .corridor-head .directions { margin-left: 0; margin-top: 0; }
+  .directions { padding: 12px 16px; }
+  /* Left with the route above it, rather than alone against the right edge. */
+  .route-foot { justify-content: flex-start; padding-top: 4px; }
   .route { padding: 22px 20px 16px; }
   /* Five names will not fit across a phone and ran off the edge of the box.
      The ends are what orient a reader; the middle is on the page below. */
@@ -406,10 +414,11 @@ body[data-claims='off'] .claim { display: none; }
      grey slab the prose has to sit inside. The coral rule already does the
      work the band was doing: this is a new section, look up. */
   .corridor { margin: 24pt 0 0; padding: 12pt 0 0; border-top: 1.5pt solid var(--coral); background: none; }
-  /* Nothing to click on paper, and the URL behind it is 200 characters of
-     place id. The corridor head still names both ends, which is what a
-     reader with a phone in the other hand actually needs. */
-  .corridor-head .directions { display: none; }
+  /* Nothing to press on paper, and the URL behind it is 200 characters of
+     place id. The corridor head still names both ends, and the chapter still
+     draws the day, which is what a reader with a phone in the other hand
+     actually needs. */
+  .directions, .route-foot { display: none; }
   .route { background: none; padding: 0; }
   figure img { height: 160pt; }
   .dishes { grid-template-columns: repeat(6, 1fr); gap: 6pt; }

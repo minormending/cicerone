@@ -1,7 +1,7 @@
 import type { Corridor, Flight, Guide, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
-import { directionsLabel, directionsUrl } from './directions.ts'
+import { dayDirectionsUrl, directionsLabel, directionsUrl } from './directions.ts'
 
 /**
  * The book.
@@ -423,10 +423,30 @@ export function routeData(places: Place[]): string {
 }
 
 /** The block a chapter opens with: the drawing, and what a map needs to replace it. */
-function route(places: Place[]): string {
+function route(places: Place[], corridors: Corridor[]): string {
   const svg = routeSvg(places)
   if (!svg) return ''
-  return `<div class="route" data-route="${escapeHtml(routeData(places))}">${svg}</div>`
+  return `<div class="route" data-route="${escapeHtml(routeData(places))}">${svg}${dayRoute(places, corridors)}</div>`
+}
+
+/**
+ * The whole day, handed over in one link.
+ *
+ * Under the map rather than beside the heading, because it is the same offer
+ * the map is making and a reader who wants the real streets is already
+ * looking at the drawing of them. It is absent more often than it is present
+ * — see `dayDirectionsUrl` for the four things that have to be true — and
+ * that is deliberate: every corridor on the day has its own link regardless,
+ * so nothing is lost when the day as a whole cannot be drawn honestly.
+ */
+function dayRoute(places: Place[], corridors: Corridor[]): string {
+  const day = dayDirectionsUrl(places, corridors)
+  if (!day) return ''
+  return `<div class="route-foot"><a class="directions" href="${escapeHtml(day.url)}" title="${escapeHtml(
+    day.description,
+  )}" aria-label="${escapeHtml(day.description)}" target="_blank" rel="noreferrer noopener">${escapeHtml(
+    day.label,
+  )}<span class="arrow" aria-hidden="true">&#8599;</span></a></div>`
 }
 
 function figure(photo: Photo | undefined, place: Place | undefined, city: string): string {
@@ -822,7 +842,7 @@ ${
 ${flightStrip(trip.flights, trip, dayIndex)}
 ${stayStrip(trip.stays, trip, dayIndex)}
 ${figure(chapterPhoto, undefined, city)}
-${route(stops)}
+${route(stops, corridors)}
 ${written.join('\n')}
 </section>`)
   }

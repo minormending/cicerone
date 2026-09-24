@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { directionsLabel, directionsUrl } from '../src/render/directions.ts'
-import type { Place } from '../src/domain/types.ts'
+import { dayDirectionsUrl, directionsLabel, directionsUrl } from '../src/render/directions.ts'
+import type { Corridor, Place, TransportMode } from '../src/domain/types.ts'
 
 const place = (id: string, name: string, extra: Partial<Place> = {}): Place => ({
   id,
@@ -65,4 +65,99 @@ test('the label says the mode the link actually asks for', () => {
   assert.match(directionsLabel(VITUS, STERN, 'metro') ?? '', /^Transit directions from St\. Vitus/)
   assert.match(directionsLabel(VITUS, STERN, 'walk') ?? '', /^Walking directions/)
   assert.match(directionsLabel(VITUS, STERN, 'walk') ?? '', /in Google Maps$/)
+})
+
+// ---- the whole day as one route ----
+
+const stop = (id: string, n: number): Place => ({
+  id,
+  name: id,
+  placeId: `ChIJ_${id}`,
+  coords: { lat: 50.08 + n / 1000, lon: 14.42 + n / 1000 },
+  dayIndex: 1,
+})
+
+const joins = (from: string, to: string, mode: TransportMode = 'walk'): Corridor => ({
+  id: `corridor:${from}:${to}`,
+  legId: `leg:${from}:${to}`,
+  fromPlaceId: from,
+  toPlaceId: to,
+  mode,
+  dayIndex: 1,
+  view: 'open',
+})
+
+const chain = (n: number, mode: TransportMode = 'walk') => {
+  const stops = Array.from({ length: n }, (_, i) => stop(`s${i}`, i))
+  const corridors = stops.slice(1).map((s, i) => joins(`s${i}`, s.id, mode))
+  return { stops, corridors }
+}
+
+test('a day walked end to end is one route, with the middle as waypoints', () => {
+  const { stops, corridors } = chain(6)
+  const day = dayDirectionsUrl(stops, corridors)
+  const url = new URL(day?.url ?? '')
+  assert.equal(url.searchParams.get('origin_place_id'), 'ChIJ_s0')
+  assert.equal(url.searchParams.get('destination_place_id'), 'ChIJ_s5')
+  assert.equal(url.searchParams.get('waypoint_place_ids'), 'ChIJ_s1|ChIJ_s2|ChIJ_s3|ChIJ_s4')
+  assert.equal(url.searchParams.get('waypoints'), 's1|s2|s3|s4')
+  assert.equal(url.searchParams.get('travelmode'), 'walking')
+  assert.equal(day?.label, "The day's walk")
+  assert.match(day?.description ?? '', /through all 6 stops/)
+})
+
+test('a day over Google’s cap gets nothing rather than a route missing five stops', () => {
+  // Eleven points is the documented limit: an origin, nine waypoints, a
+  // destination. Truncating to fit would look right and be wrong, which is
+  // the worst of the two ways to be wrong.
+  const fits = chain(11)
+  const over = chain(12)
+  assert.ok(dayDirectionsUrl(fits.stops, fits.corridors))
+  assert.equal(dayDirectionsUrl(over.stops, over.corridors), undefined)
+})
+
+test('a day with a transit leg gets nothing, because Google cannot route it', () => {
+  // Verified against Google, not assumed: asked for a three-stop transit
+  // route it answers "we could not calculate transit directions" and shows
+  // an empty panel.
+  const { stops, corridors } = chain(4)
+  corridors[1]!.mode = 'metro'
+  assert.equal(dayDirectionsUrl(stops, corridors), undefined)
+  // Even all-transit, because the failure is waypoints, not the mix.
+  const allTransit = chain(4, 'transit')
+  assert.equal(dayDirectionsUrl(allTransit.stops, allTransit.corridors), undefined)
+})
+
+test('a day of mixed walkable modes gets nothing: a URL carries one', () => {
+  // A day that cycles to the park and walks the rest would be drawn entirely
+  // on foot, or entirely on a bicycle. Neither is the day.
+  const { stops, corridors } = chain(4)
+  corridors[0]!.mode = 'cycle'
+  assert.equal(dayDirectionsUrl(stops, corridors), undefined)
+})
+
+test('a gap with no corridor across it breaks the day', () => {
+  // The link would claim a continuous walk across a jump the itinerary never
+  // made. Matched by id, so a day with the right *number* of corridors that
+  // do not join its stops up still fails.
+  const { stops, corridors } = chain(5)
+  corridors[2] = joins('s0', 's4')
+  assert.equal(dayDirectionsUrl(stops, corridors), undefined)
+})
+
+test('two stops are left to the corridor that already links them', () => {
+  const { stops, corridors } = chain(2)
+  assert.equal(dayDirectionsUrl(stops, corridors), undefined)
+  assert.ok(directionsUrl(stops[0]!, stops[1]!, 'walk'))
+})
+
+test('one stop without a place id costs the whole day its ids, not its link', () => {
+  // The two lists are matched by position, so a partial list would hand a
+  // waypoint somebody else's identity. Coordinates for all of them instead.
+  const { stops, corridors } = chain(4)
+  delete stops[2]!.placeId
+  const url = new URL(dayDirectionsUrl(stops, corridors)?.url ?? '')
+  assert.equal(url.searchParams.get('waypoint_place_ids'), null)
+  assert.equal(url.searchParams.get('waypoints'), 's1|50.082000,14.422000')
+  assert.equal(url.searchParams.get('origin_place_id'), 'ChIJ_s0')
 })

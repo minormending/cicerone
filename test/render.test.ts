@@ -232,8 +232,75 @@ test('a corridor head carries directions to the route it names', () => {
   assert.match(head, /rel="noreferrer noopener"/)
 })
 
-test('directions are hidden on paper, where there is nothing to click', () => {
-  assert.match(BOOK_CSS, /\.corridor-head \.directions \{ display: none; \}/)
+test('directions are hidden on paper, where there is nothing to press', () => {
+  // Read out of the print block rather than the whole sheet, so a rule that
+  // hid the button on screen could never satisfy this.
+  const print = BOOK_CSS.slice(BOOK_CSS.indexOf('@media print'))
+  assert.match(print, /\.directions[^{]*\{[^}]*display:\s*none/)
+})
+
+/** A three-stop day, walked, with something written at every stop. */
+function walkedDay(mode: Corridor['mode'] = 'walk') {
+  const stops = ['vitus', 'stern', 'loreta'].map((id, i) =>
+    place(id, id, { placeId: `ChIJ_${id}`, arrive: `1${i}:00` }),
+  )
+  const corridors: Corridor[] = [0, 1].map((i) => ({
+    ...CORRIDOR,
+    id: `corridor:${i}`,
+    fromPlaceId: stops[i]!.id,
+    toPlaceId: stops[i + 1]!.id,
+    mode,
+  }))
+  const trip: Trip = { ...TRIP, places: stops, legs: [] }
+  const written = stops.map((s, i) =>
+    passage({ id: `p${i}`, subject: { kind: 'place', id: s.id }, body: 'Built to out-face the palace opposite.' }),
+  )
+  // A corridor with nothing written does not render at all, so the corridor
+  // links have nothing to hang on unless each one is written.
+  for (const c of corridors) {
+    written.push(
+      passage({
+        id: `w${c.id}`,
+        kind: c.mode === 'walk' ? 'passing' : 'prepare',
+        subject: { kind: 'corridor', id: c.id },
+        body: 'The square is not a square so much as a standoff.',
+      }),
+    )
+  }
+  return renderBook(trip, guide(written), { corridors })
+}
+
+test('a day walked end to end offers the whole day as one route', () => {
+  const html = walkedDay()
+  const foot = html.slice(html.indexOf('route-foot'), html.indexOf('route-foot') + 900)
+  const href = /href="([^"]+)"/.exec(foot)
+  assert.ok(href, 'the day link sits under the route drawing')
+  const url = new URL(href[1]!.replaceAll('&amp;', '&'))
+  // The middle stop is a waypoint, which is the whole difference between this
+  // and the corridor links either side of it.
+  assert.equal(url.searchParams.get('waypoint_place_ids'), 'ChIJ_stern')
+  assert.equal(url.searchParams.get('origin_place_id'), 'ChIJ_vitus')
+  assert.equal(url.searchParams.get('destination_place_id'), 'ChIJ_loreta')
+  // Escaped, because the apostrophe goes through escapeHtml like everything else.
+  assert.ok(foot.includes('The day&#39;s walk'))
+})
+
+test('a transit day keeps its corridor links and loses the day one', () => {
+  // Point to point Google routes transit happily; through waypoints it
+  // answers that it could not calculate them and shows an empty panel. So
+  // the legs keep their links and the day loses its own.
+  const html = walkedDay('metro')
+  assert.ok(!html.includes('route-foot'), 'no whole-day route Google cannot calculate')
+  assert.equal((html.match(/maps\/dir\//g) ?? []).length, 2, 'both corridors still link, one leg at a time')
+})
+
+test('the real map mounts above the day link, not on top of it', () => {
+  // Appending the canvas put the map underneath the button offering to show
+  // you the route: a link to the day's walk, floating above the day's walk.
+  // insertBefore with a null reference still appends, so a day without the
+  // link is unaffected.
+  assert.match(MAP_JS, /insertBefore\([^)]*route-foot/)
+  assert.ok(!/host\.appendChild\(canvas\)/.test(MAP_JS), 'not appended any more')
 })
 
 test('a day with nothing written is not a chapter', () => {

@@ -70,7 +70,11 @@ export const MAP_JS = `
   function draw(host, route) {
     var canvas = document.createElement('div');
     canvas.className = 'route-map';
-    host.appendChild(canvas);
+    /* Before the foot, not after it. The chapter's link to the whole day in
+       Google Maps is already in the box, and appending put the map beneath
+       it: a button offering to show you the route, floating above the route.
+       insertBefore(el, null) appends, so the no-foot case still works. */
+    host.insertBefore(canvas, host.querySelector('.route-foot'));
 
     var map = new maplibregl.Map({
       container: canvas,
