@@ -1,4 +1,4 @@
-import type { Corridor, Coordinates, Flight, Guide, Leg, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
+import type { Corridor, Coordinates, Flight, Guide, Leg, Passage, Photo, Place, PlaceFacts, RouteFact, Stay, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween } from '../corridor/legs.ts'
 import { dayDirectionsUrl, directionsLabel, directionsUrl } from './directions.ts'
@@ -845,9 +845,21 @@ function directions(corridor: Corridor, from: Place, to: Place): string {
 function cost(leg?: Leg): string {
   const route = leg?.route
   if (!route) return ''
+  return `<span class="corridor-cost">${escapeHtml(costText(route))}</span>`
+}
+
+/**
+ * The corridor head's figures as plain text: "530 m · 6 min", or "15.1 km".
+ *
+ * Exported because the routine is handed exactly this string in its brief.
+ * A passage that says "twenty minutes" under a head that says 25 MIN is the
+ * book contradicting itself in adjacent lines, and the only reliable way to
+ * stop it is for the writer and the page to read one formatter.
+ */
+export function costText(route: RouteFact): string {
   const parts = [distanceText(route.metres)]
   if (route.mode !== 'transit') parts.push(`${Math.max(1, Math.round(route.seconds / 60))} min`)
-  return `<span class="corridor-cost">${escapeHtml(parts.join(' \u00B7 '))}</span>`
+  return parts.join(' \u00B7 ')
 }
 
 /**

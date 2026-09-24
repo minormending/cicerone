@@ -35,11 +35,11 @@ import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import { imageUrl, researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
-import { dateOf, escapeHtml, renderBook } from '../src/render/book.ts'
+import { costText, dateOf, escapeHtml, renderBook } from '../src/render/book.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
 import { MAP_JS } from '../src/render/maps.ts'
 import { readSession, stillValid, TOKEN_PATH, writeSession, writeToken } from '../src/backend/session.ts'
-import type { Coordinates, Corridor, Guide, Passage, TransportMode, Trip } from '../src/domain/types.ts'
+import type { Coordinates, Corridor, Guide, Passage, RouteFact, TransportMode, Trip } from '../src/domain/types.ts'
 
 const USAGE = `cicerone — the seam between the routine and the database
 
@@ -163,10 +163,28 @@ async function connect(): Promise<Store> {
 }
 
 /** The trip as the routine needs to see it: graph, corridors, what exists. */
-function brief(trip: Trip) {
+/**
+ * A handful of points along a route, for the writer to research.
+ *
+ * A corridor used to arrive as two ends and a mode, so "research the route
+ * between them" meant guessing the route. The planner's own line is in the
+ * graph now, and eight points along it are enough to say which streets and
+ * which bank the walk actually takes, without handing a model a thousand
+ * coordinates it would only skim.
+ */
+export function viaPoints(route: RouteFact, count = 8): Coordinates[] {
+  const inner = route.path.slice(1, -1)
+  if (inner.length <= count) return inner
+  const step = inner.length / count
+  return Array.from({ length: count }, (_, i) => inner[Math.floor(i * step + step / 2)] as Coordinates)
+}
+
+export function brief(trip: Trip) {
   const withL = withLegs(trip)
   const corridors = corridorsOf(withL)
   const byId = new Map(withL.places.map((p) => [p.id, p]))
+  const legs = new Map(withL.legs.map((l) => [l.id, l]))
+  const stayIds = new Set((withL.stays ?? []).map((s) => s.placeId).filter(Boolean))
 
   return {
     trip: { id: withL.id, title: withL.title, departsOn: withL.departsOn },
@@ -192,22 +210,50 @@ function brief(trip: Trip) {
         name: p.name,
         day: p.dayIndex,
         arrive: p.arrive,
+        depart: p.depart,
         coords: p.coords,
         country: p.countryCode,
         note: p.note,
+        // A visit to the booked hotel. The same hotel appears on several days
+        // of a real trip and each visit is a different thing — a bag dropped,
+        // a key collected, a room left — which `stays` and the clock decide.
+        ...(p.placeId && stayIds.has(p.placeId) ? { stay: true } : {}),
       })),
-    corridors: corridors.map((c) => ({
-      id: c.id,
-      day: c.dayIndex,
-      mode: c.mode,
-      view: c.view,
-      from: byId.get(c.fromPlaceId)?.name,
-      to: byId.get(c.toPlaceId)?.name,
-      fromCoords: byId.get(c.fromPlaceId)?.coords,
-      toCoords: byId.get(c.toPlaceId)?.coords,
-      // `passing` where they can see out; `prepare` where they cannot.
-      writable: c.view === 'open' ? ['passing', 'event', 'look_for'] : ['prepare'],
-    })),
+    corridors: corridors.map((c) => {
+      const from = byId.get(c.fromPlaceId)
+      const to = byId.get(c.toPlaceId)
+      const route = legs.get(c.legId)?.route
+      // What the traveller's own planner routed this pair as, when that is
+      // not what the book calls it. The book keeps its mode — passages were
+      // written against it — but a writer should know the planner disagrees.
+      const planned = from?.placeId && to?.placeId ? withL.routes?.[`${from.placeId}>${to.placeId}`] : undefined
+      return {
+        id: c.id,
+        day: c.dayIndex,
+        mode: c.mode,
+        view: c.view,
+        from: from?.name,
+        to: to?.name,
+        fromCoords: from?.coords,
+        toCoords: to?.coords,
+        // The planner's route, where it agreed about the mode. `shown` is the
+        // exact text the corridor head prints; anything the passage says
+        // about distance or time has to agree with it.
+        ...(route
+          ? {
+              route: {
+                metres: Math.round(route.metres),
+                ...(route.mode !== 'transit' ? { minutes: Math.max(1, Math.round(route.seconds / 60)) } : {}),
+                shown: costText(route),
+                via: viaPoints(route),
+              },
+            }
+          : {}),
+        ...(planned && planned.mode !== c.mode ? { plannerMode: planned.mode } : {}),
+        // `passing` where they can see out; `prepare` where they cannot.
+        writable: c.view === 'open' ? ['passing', 'event', 'look_for'] : ['prepare'],
+      }
+    }),
   }
 }
 

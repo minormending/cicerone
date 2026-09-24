@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { notATripId, readGuide } from '../cli/cicerone.ts'
-import type { Passage, Trip } from '../src/domain/types.ts'
+import { brief, notATripId, readGuide, viaPoints } from '../cli/cicerone.ts'
+import type { Passage, RouteFact, Trip } from '../src/domain/types.ts'
 
 /*
  * The seam between a hand-written file and the database.
@@ -145,4 +145,57 @@ test('the flag surviving means the offline check, not the database', () => {
   const { out } = cli('check', '--trip', 'no-such-trip.json', 'no-such-passages.json')
   assert.match(out, /Could not read no-such-trip\.json/)
   assert.doesNotMatch(out, /not a trip id/)
+})
+
+// ---- what the routine is handed ----
+
+const walkRoute = (points: number): RouteFact => ({
+  metres: 529.2,
+  seconds: 360,
+  mode: 'walk',
+  path: Array.from({ length: points }, (_, i) => ({ lat: 50.078 + i / 10000, lon: 14.432 })),
+})
+
+const routedTrip = (docMode: RouteFact['mode']): Trip => ({
+  id: 't',
+  title: 'Prague',
+  departsOn: '2026-10-14',
+  places: [
+    { id: 'hotel', name: 'Hotel', placeId: 'H', coords: { lat: 50.0781, lon: 14.432 }, dayIndex: 1, arrive: '10:00' },
+    { id: 'banh', name: 'Banh Mi', placeId: 'B', coords: { lat: 50.0742, lon: 14.4345 }, dayIndex: 1, arrive: '11:00' },
+  ],
+  legs: [],
+  stays: [{ name: 'Hotel', placeId: 'H', checkIn: '2026-10-15', checkOut: '2026-10-18' }],
+  routes: { 'H>B': { ...walkRoute(40), mode: docMode } },
+})
+
+test('the brief hands over the figures the corridor head will print', () => {
+  // A passage saying "twenty minutes" under a head saying 25 MIN is the book
+  // contradicting itself in adjacent lines. The writer gets the page's string.
+  const corridor = brief(routedTrip('walk')).corridors[0]
+  assert.equal(corridor?.route?.shown, '530 m \u00B7 6 min')
+  assert.equal(corridor?.route?.minutes, 6)
+  assert.equal(corridor?.route?.via.length, 8, 'a handful of points, not the whole line')
+  assert.equal(corridor?.plannerMode, undefined)
+})
+
+test('the brief says when the planner routed a corridor differently', () => {
+  const corridor = brief(routedTrip('transit')).corridors[0]
+  assert.equal(corridor?.route, undefined, 'a tram line is not attached to a walk')
+  assert.equal(corridor?.plannerMode, 'transit')
+})
+
+test('a visit to the booked hotel is marked, so the routine can tell it is the stay', () => {
+  const places = brief(routedTrip('walk')).places
+  assert.equal(places.find((p) => p.id === 'hotel')?.stay, true)
+  assert.equal(places.find((p) => p.id === 'banh')?.stay, undefined)
+})
+
+test('via points come from inside the route and never repeat its ends', () => {
+  const route = walkRoute(100)
+  const via = viaPoints(route)
+  assert.equal(via.length, 8)
+  assert.ok(!via.includes(route.path[0]!) && !via.includes(route.path[99]!))
+  // A short route gives what it has rather than inventing points.
+  assert.equal(viaPoints(walkRoute(4)).length, 2)
 })
