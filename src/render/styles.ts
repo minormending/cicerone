@@ -247,11 +247,46 @@ figcaption { display: flex; align-items: center; justify-content: space-between;
   background: var(--sand);
   border-top: 2px solid var(--coral);
 }
-.corridor-head { display: flex; align-items: center; gap: 14px; padding-bottom: 20px; flex-wrap: wrap; }
-.corridor-head .dot { width: 4px; height: 4px; border-radius: 50%; background: #B3AC9B; }
-.corridor-route { font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em; color: #6E6A5E;
-  text-transform: uppercase; }
-/* Single column, deliberately. Two columns looked right in a mockup and
+/* No wrapping, top-aligned. Both matter and for the same reason: with
+   flex-wrap on, a route naming two long Czech stops is measured at its full
+   width, does not fit, and pushes the button onto a line of its own where it
+   hangs in the middle of the band attached to nothing. With wrapping off the
+   route shrinks instead and its text wraps inside its own box, so the button
+   stays on the first line and the head stays one block. Top rather than
+   centre so the button sits beside the first of those lines. */
+.corridor-head { display: flex; align-items: flex-start; gap: 14px; padding-bottom: 20px; flex-wrap: nowrap;
+  max-width: 34rem; }
+/* Nudged down by hand. The head aligns its items to the top now, so a 4px
+   dot that used to be centred against the label sat on the label's ascender
+   instead, reading as a stray mark rather than a separator. */
+.corridor-head .dot { width: 4px; height: 4px; border-radius: 50%; background: #B3AC9B; margin-top: 6px; }
+/* Allowed to shrink, which is what keeps the button on the first line. Left
+   to its natural width, a route naming two long stops pushed the button onto
+   a line of its own, where it hung in the middle of the band attached to
+   nothing. Now the names wrap and the button stays where it was. */
+.corridor-route { flex: 1 1 auto; min-width: 0;
+  font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em; color: #6E6A5E;
+  text-transform: uppercase; line-height: 1.5; }
+/* The way there, pushed to the far end of the head so it reads as an action
+   rather than another piece of the label. Coral, because it is the one thing
+   in a corridor a reader can click, and coral is what this book uses for the
+   trip's own things. */
+.corridor-head .directions {
+  flex: 0 0 auto; margin-left: auto; margin-top: -6px;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--sans); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--coral-ink); text-decoration: none;
+  padding: 5px 11px; border: 1px solid rgba(226, 87, 76, 0.32); border-radius: 999px;
+  background: rgba(251, 250, 247, 0.6);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.corridor-head .directions:hover { background: var(--paper); border-color: var(--coral); }
+.corridor-head .directions .arrow { font-size: 12px; line-height: 1; }
+/* The head is capped at the body's measure so the button's right edge lands
+   on the same vertical as the prose beneath it. Uncapped it overhung by
+   sixteen pixels, which is exactly far enough to look like a mistake.
+
+   Single column, deliberately. Two columns looked right in a mockup and
    measured 170px wide on a real page — about eighteen characters a line,
    against the forty-five a reader wants. The band already makes a corridor
    read as a different kind of thing; the columns were decoration that cost
@@ -329,6 +364,18 @@ body[data-claims='off'] .claim { display: none; }
   .entry p, .corridor-body p { font-size: 18px; }
   .figures { gap: 24px; flex-wrap: wrap; }
   .corridor { margin: 40px -20px 0; padding: 32px 20px 34px; }
+  /* No room for a route and a button on one line. The route takes the full
+     width and the button drops beneath it, left-aligned: pushed right it
+     would sit alone against the edge with nothing to hold it. */
+  .corridor-head { flex-wrap: wrap; }
+  .corridor-route { flex-basis: 100%; }
+  /* With the route on its own line the dot separates nothing, and a dot
+     separating nothing is just a mark on the page. */
+  .corridor-head .dot { display: none; }
+  /* Bigger than it needs to look, because this is the one control in the
+     book and it gets pressed on a pavement, one-handed, walking. Thirty
+     pixels is a comfortable click and an uncomfortable tap. */
+  .corridor-head .directions { margin-left: 0; margin-top: 0; padding: 12px 16px; }
   .route { padding: 22px 20px 16px; }
   /* Five names will not fit across a phone and ran off the edge of the box.
      The ends are what orient a reader; the middle is on the page below. */
@@ -359,6 +406,10 @@ body[data-claims='off'] .claim { display: none; }
      grey slab the prose has to sit inside. The coral rule already does the
      work the band was doing: this is a new section, look up. */
   .corridor { margin: 24pt 0 0; padding: 12pt 0 0; border-top: 1.5pt solid var(--coral); background: none; }
+  /* Nothing to click on paper, and the URL behind it is 200 characters of
+     place id. The corridor head still names both ends, which is what a
+     reader with a phone in the other hand actually needs. */
+  .corridor-head .directions { display: none; }
   .route { background: none; padding: 0; }
   figure img { height: 160pt; }
   .dishes { grid-template-columns: repeat(6, 1fr); gap: 6pt; }

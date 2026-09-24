@@ -1,6 +1,7 @@
 import type { Corridor, Flight, Guide, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween, minutesOfDay } from '../corridor/legs.ts'
+import { directionsLabel, directionsUrl } from './directions.ts'
 
 /**
  * The book.
@@ -676,6 +677,27 @@ function linkify(escaped: string): string {
   })
 }
 
+/**
+ * The way there, in the app that knows it.
+ *
+ * Sits in the corridor head rather than under the prose, because it belongs
+ * with the "Walk - A to B" line that names the stretch: the head says which
+ * stretch this is, and this says show me. Under the passage it would read as
+ * a source, which it is not - nothing in the prose rests on it.
+ *
+ * `rel="noreferrer"` is not boilerplate. Without it the click tells Google
+ * which document the reader came from, and this document is a private
+ * itinerary with somebody's hotel in it.
+ */
+function directions(corridor: Corridor, from: Place, to: Place): string {
+  const url = directionsUrl(from, to, corridor.mode)
+  if (!url) return ''
+  const label = directionsLabel(from, to, corridor.mode) ?? 'Directions in Google Maps'
+  return `<a class="directions" href="${escapeHtml(url)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(
+    label,
+  )}" target="_blank" rel="noreferrer noopener">Directions<span class="arrow" aria-hidden="true">&#8599;</span></a>`
+}
+
 function renderCorridor(corridor: Corridor, from: Place, to: Place, passages: Numbered[]): string {
   if (passages.length === 0) return ''
   const lead = passages[0]?.passage
@@ -686,6 +708,7 @@ function renderCorridor(corridor: Corridor, from: Place, to: Place, passages: Nu
 <span class="label accent">${escapeHtml(lead ? KIND_LABEL[lead.kind] : 'Passing')}</span>
 <span class="dot"></span>
 <span class="corridor-route">${escapeHtml(mode)} &middot; ${escapeHtml(from.name)} &rarr; ${escapeHtml(to.name)}</span>
+${directions(corridor, from, to)}
 </div>
 <div class="corridor-body">
 ${passages.map(renderPassage).join('\n')}

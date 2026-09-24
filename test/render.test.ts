@@ -197,6 +197,45 @@ test('a corridor renders between the places it joins', () => {
   assert.ok(html.includes('standoff'))
 })
 
+test('a corridor head carries directions to the route it names', () => {
+  const trip: Trip = {
+    ...TRIP,
+    places: [
+      { ...TRIP.places[0]!, placeId: 'ChIJ_vitus' },
+      { ...TRIP.places[1]!, placeId: 'ChIJ_stern' },
+    ],
+  }
+  const html = renderBook(
+    trip,
+    guide([
+      passage(),
+      passage({
+        id: 'c',
+        kind: 'passing',
+        subject: { kind: 'corridor', id: 'corridor:vitus:stern' },
+        body: 'The square is not a square so much as a standoff.',
+      }),
+      passage({ id: 's', subject: { kind: 'place', id: 'stern' }, body: 'Built to out-face the palace opposite.' }),
+    ]),
+    { corridors: [CORRIDOR] },
+  )
+
+  const head = html.slice(html.indexOf('corridor-head'), html.indexOf('corridor-body'))
+  const href = /href="(https:\/\/www\.google\.com\/maps\/dir\/[^"]+)"/.exec(head)
+  assert.ok(href, 'the link is in the corridor head, not somewhere under the prose')
+  const url = new URL(href[1]!.replaceAll('&amp;', '&'))
+  assert.equal(url.searchParams.get('origin_place_id'), 'ChIJ_vitus')
+  assert.equal(url.searchParams.get('destination_place_id'), 'ChIJ_stern')
+  assert.equal(url.searchParams.get('travelmode'), 'walking')
+  // The click must not tell Google which document it came from: this one has
+  // somebody's hotel in it.
+  assert.match(head, /rel="noreferrer noopener"/)
+})
+
+test('directions are hidden on paper, where there is nothing to click', () => {
+  assert.match(BOOK_CSS, /\.corridor-head \.directions \{ display: none; \}/)
+})
+
 test('a day with nothing written is not a chapter', () => {
   // Silence is a legitimate outcome and must not leave an empty page behind.
   const html = renderBook(TRIP, guide([]), { corridors: [CORRIDOR] })
