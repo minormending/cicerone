@@ -27,6 +27,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { checkGuide, substantiatedShare, type CheckResult } from '../src/check.ts'
+import { RULE_TEXT, type ReviewNote, type ReviewRule } from '../src/review.ts'
 import { corridorsOf } from '../src/corridor/waking.ts'
 import { withLegs } from '../src/corridor/legs.ts'
 import { lightPassages } from '../src/light/light.ts'
@@ -35,7 +36,8 @@ import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import { imageUrl, researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
-import { costText, dateOf, escapeHtml, renderBook } from '../src/render/book.ts'
+import { dateOf, escapeHtml, renderBook } from '../src/render/book.ts'
+import { costText, routeMinutes } from '../src/render/cost.ts'
 import { BOOK_CSS } from '../src/render/styles.ts'
 import { MAP_JS } from '../src/render/maps.ts'
 import { readSession, stillValid, TOKEN_PATH, writeSession, writeToken } from '../src/backend/session.ts'
@@ -49,6 +51,7 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone save <id> <file.json>   check a guide, then write it
   cicerone check <id> [file.json]  check without writing
   cicerone check --trip <trip.json> <passages.json>   check with no database
+      --sources <sources.json>     ...and compare each stop's length with how much is written about it
   cicerone import <wanderlog-key>  fetch a trip and store it
   cicerone photos <id>             find and store a photograph per subject
   cicerone book <id> [out.html]    render the guide as one standalone file
@@ -234,6 +237,8 @@ export function brief(trip: Trip) {
         view: c.view,
         from: from?.name,
         to: to?.name,
+        fromId: c.fromPlaceId,
+        toId: c.toPlaceId,
         fromCoords: from?.coords,
         toCoords: to?.coords,
         // The planner's route, where it agreed about the mode. `shown` is the
@@ -243,7 +248,7 @@ export function brief(trip: Trip) {
           ? {
               route: {
                 metres: Math.round(route.metres),
-                ...(route.mode !== 'transit' ? { minutes: Math.max(1, Math.round(route.seconds / 60)) } : {}),
+                ...(route.mode !== 'transit' ? { minutes: routeMinutes(route) } : {}),
                 shown: costText(route),
                 via: viaPoints(route),
               },
@@ -257,7 +262,7 @@ export function brief(trip: Trip) {
   }
 }
 
-function report(result: CheckResult): void {
+function report(result: CheckResult, opts: { snippets: boolean } = { snippets: false }): void {
   const c = result.coverage
   const share = Math.round(substantiatedShare(c) * 100)
   console.log(
@@ -270,9 +275,71 @@ function report(result: CheckResult): void {
         '  A guide made mostly of atmosphere is the failure this design exists to avoid.',
     )
   }
+  printReview(result.review, opts.snippets)
   for (const fault of result.faults) {
     console.error(`  ${fault.rule}  ${fault.passageId}: ${fault.detail}`)
   }
+}
+
+/**
+ * The self-review, grouped by rule, every note listed.
+ *
+ * All of them rather than the first few, because the reader this is written
+ * for is the routine, and a note it cannot see is a note it cannot fix. The
+ * rules are tuned so that a finished book produces a page of them rather than
+ * a flood; if that stops being true, tune the rule rather than the printing.
+ */
+function printReview(notes: ReviewNote[], hadSnippets: boolean): void {
+  console.log('\nreview — notes, never faults; nothing here stops a save')
+  if (notes.length === 0) console.log('  nothing to report')
+  const byRule = new Map<ReviewRule, ReviewNote[]>()
+  for (const note of notes) byRule.set(note.rule, [...(byRule.get(note.rule) ?? []), note])
+  for (const rule of Object.keys(RULE_TEXT) as ReviewRule[]) {
+    const list = byRule.get(rule)
+    if (!list) continue
+    console.log(`  ${rule} (${list.length}) — ${RULE_TEXT[rule]}`)
+    for (const note of list) console.log(`    ${note.subject}  ${note.detail}`)
+  }
+  if (!hadSnippets) {
+    console.log('  (pass --sources <sources.json> to compare each stop\'s length with how much is written about it)')
+  }
+}
+
+/**
+ * How much the world has written about each stop, from `cicerone sources`.
+ *
+ * Counted rather than read: the review wants to know that three hundred
+ * publishers wrote about the bridge and none about the hotel, not what they
+ * said.
+ */
+function readSnippets(file: string): Map<string, number> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(readFileSync(file, 'utf8'))
+  } catch (err) {
+    die(`Could not read ${file}: ${(err as Error).message}`)
+  }
+  if (!Array.isArray(parsed)) die(`${file} should be the array \`cicerone sources\` writes.`)
+  const out = new Map<string, number>()
+  for (const row of parsed as Array<{ place?: unknown; sources?: unknown }>) {
+    if (typeof row.place === 'string' && Array.isArray(row.sources)) out.set(row.place, row.sources.length)
+  }
+  return out
+}
+
+/**
+ * Take `--sources <file>` out of the arguments, wherever it was put.
+ *
+ * Removed rather than skipped, because everything else reads its arguments
+ * by position: `check --trip a b` finds its files at 1 and 2, and a flag left
+ * in the list would be read as a trip file.
+ */
+export function takeSources(args: string[]): { args: string[]; sources?: string } {
+  const at = args.indexOf('--sources')
+  if (at === -1) return { args }
+  const sources = args[at + 1]
+  if (!sources || sources.startsWith('--')) die('--sources needs the file `cicerone sources` wrote.')
+  return { args: [...args.slice(0, at), ...args.slice(at + 2)], sources }
 }
 
 /**
@@ -290,7 +357,15 @@ function readTripFile(parsed: unknown): { trip: Trip; corridors: Corridor[] } {
   const asBrief = parsed as {
     trip?: { id?: string; title?: string; departsOn?: string }
     places?: Array<{ id: string; name: string; day?: number; arrive?: string; coords: Coordinates }>
-    corridors?: Array<{ id: string; day?: number; mode?: TransportMode; view?: Corridor['view'] }>
+    corridors?: Array<{
+      id: string
+      day?: number
+      mode?: TransportMode
+      view?: Corridor['view']
+      fromId?: string
+      toId?: string
+      route?: { metres: number; minutes?: number; via?: Coordinates[] }
+    }>
   }
 
   if (Array.isArray(asBrief.corridors) && Array.isArray(asBrief.places)) {
@@ -312,12 +387,37 @@ function readTripFile(parsed: unknown): { trip: Trip; corridors: Corridor[] } {
     const corridors: Corridor[] = asBrief.corridors.map((c) => ({
       id: c.id,
       legId: c.id.replace(/^corridor:/, 'leg:'),
-      fromPlaceId: '',
-      toPlaceId: '',
+      fromPlaceId: c.fromId ?? '',
+      toPlaceId: c.toId ?? '',
       mode: c.mode ?? 'walk',
       view: c.view ?? 'open',
       ...(c.day !== undefined ? { dayIndex: c.day } : {}),
     }))
+    /*
+     * The routes come back as legs, because that is where the review looks
+     * for them. Only what the brief carried survives the trip: the distance,
+     * the minutes the heading prints, and the eight via points in place of
+     * the full line. That is everything the review compares against, and a
+     * brief with no routes gives legs with none, which the review skips.
+     */
+    trip.legs = asBrief.corridors.flatMap((c) =>
+      c.route
+        ? [
+            {
+              id: c.id.replace(/^corridor:/, 'leg:'),
+              fromPlaceId: c.fromId ?? '',
+              toPlaceId: c.toId ?? '',
+              mode: c.mode ?? 'walk',
+              route: {
+                metres: c.route.metres,
+                seconds: (c.route.minutes ?? 0) * 60,
+                path: c.route.via ?? [],
+                mode: c.mode ?? 'walk',
+              },
+            },
+          ]
+        : [],
+    )
     return { trip, corridors }
   }
 
@@ -400,7 +500,9 @@ export function readGuide(file: string, trip: Trip, tripId: string): Guide {
 }
 
 async function main(): Promise<void> {
-  const [command, ...rest] = process.argv.slice(2)
+  const taken = takeSources(process.argv.slice(2))
+  const snippets = taken.sources ? readSnippets(taken.sources) : undefined
+  const [command, ...rest] = taken.args
 
   if (!command || command === 'help' || command === '--help') {
     console.log(USAGE)
@@ -460,8 +562,8 @@ async function main(): Promise<void> {
 
     const { trip, corridors } = readTripFile(parsed)
     const guide = readGuide(passageFile, trip, trip.id)
-    const result = checkGuide({ trip, corridors, guide })
-    report(result)
+    const result = checkGuide({ trip, corridors, guide, ...(snippets ? { snippets } : {}) })
+    report(result, { snippets: snippets !== undefined })
     if (!result.ok) die(`\n${result.faults.length} fault(s).`)
     return
   }
@@ -482,8 +584,8 @@ async function main(): Promise<void> {
     const file = rest[1]
 
     const guide = file ? readGuide(file, withL, id) : await store.getGuide(id)
-    const result = checkGuide({ trip: withL, corridors, guide })
-    report(result)
+    const result = checkGuide({ trip: withL, corridors, guide, ...(snippets ? { snippets } : {}) })
+    report(result, { snippets: snippets !== undefined })
 
     if (!result.ok) die(`\n${result.faults.length} fault(s). Nothing was written.`)
     if (command === 'check') return

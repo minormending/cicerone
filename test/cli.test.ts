@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { brief, notATripId, readGuide, viaPoints } from '../cli/cicerone.ts'
+import { brief, notATripId, readGuide, takeSources, viaPoints } from '../cli/cicerone.ts'
 import type { Passage, RouteFact, Trip } from '../src/domain/types.ts'
 
 /*
@@ -198,4 +198,60 @@ test('via points come from inside the route and never repeat its ends', () => {
   assert.ok(!via.includes(route.path[0]!) && !via.includes(route.path[99]!))
   // A short route gives what it has rather than inventing points.
   assert.equal(viaPoints(walkRoute(4)).length, 2)
+})
+
+// ---- the review, end to end ----
+
+test('--sources is taken out wherever it is put, so positions still mean what they meant', () => {
+  assert.deepEqual(takeSources(['check', '--trip', 'a.json', 'b.json', '--sources', 's.json']), {
+    args: ['check', '--trip', 'a.json', 'b.json'],
+    sources: 's.json',
+  })
+  assert.deepEqual(takeSources(['check', '--sources', 's.json', '--trip', 'a.json', 'b.json']).args, [
+    'check',
+    '--trip',
+    'a.json',
+    'b.json',
+  ])
+  assert.deepEqual(takeSources(['check', 'id']), { args: ['check', 'id'] })
+})
+
+test('the offline check prints the review, and the review never fails it', () => {
+  // The routine's own path: a brief from `cicerone trip`, a passages file,
+  // and the sources file, exactly as step 3 of its task writes them.
+  const tripFile = scratch('trip.json', {
+    trip: { id: 't', title: 'Prague' },
+    days: [{ day: 1, stops: ['Bridge', 'Bakery'] }],
+    places: [
+      { id: 'bridge', name: 'Bridge', day: 1, coords: { lat: 50.086, lon: 14.411 } },
+      { id: 'bakery', name: 'Bakery', day: 1, coords: { lat: 50.075, lon: 14.437 } },
+    ],
+    corridors: [
+      {
+        id: 'corridor:bridge:bakery',
+        day: 1,
+        mode: 'walk',
+        view: 'open',
+        fromId: 'bridge',
+        toId: 'bakery',
+        route: { metres: 2100, minutes: 25, shown: '2.1 km \u00B7 25 min', via: [] },
+      },
+    ],
+  })
+  const body = 'Twenty minutes east and steadily uphill, and the street grid loosens as you climb.'
+  const passageFile = scratch('passages.json', [
+    passage({ id: 'c', kind: 'passing', subject: { kind: 'corridor', id: 'corridor:bridge:bakery' }, body }),
+  ])
+  const sourcesFile = scratch('sources.json', [{ place: 'bridge', sources: new Array(300).fill({}) }])
+
+  const withSources = cli('check', '--trip', tripFile, passageFile, '--sources', sourcesFile)
+  assert.equal(withSources.code, 0, 'notes are not faults')
+  assert.match(withSources.out, /review — notes, never faults/)
+  assert.match(withSources.out, /opening-distance \(1\)/)
+  assert.match(withSources.out, /figures \(1\).*\n.*heading prints 2\.1 km · 25 min/)
+  assert.match(withSources.out, /silent/)
+  assert.doesNotMatch(withSources.out, /pass --sources/)
+
+  const without = cli('check', '--trip', tripFile, passageFile)
+  assert.match(without.out, /pass --sources <sources\.json>/, 'and says what it could not check')
 })

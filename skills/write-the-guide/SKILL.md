@@ -16,8 +16,9 @@ between the fourth stop and the fifth.
 Everything below was learned writing the first full book, a five-day Prague
 trip, and then reviewing it three times: once as a whole, once corridor by
 corridor, once stop by stop. Most of the rules exist because the first draft
-broke them. The **Before you save** checklist at the end repeats those three
-reviews on your own draft; do it every time.
+broke them. `check` now runs those three reviews on your draft every time
+and prints what they find; the **Before you save** section at the end says
+how to read that and what it still cannot see.
 
 ## The work
 
@@ -27,7 +28,7 @@ npm run --silent cicerone trip ID > trip.json    # the brief: days, stops, corri
 npm run cicerone sources ID sources.json         # what is already cited about each stop
 npm run cicerone guide ID passages.json          # what is already written, if anything
 # ... research and write passages.json ...
-npm run --silent cicerone -- check --trip trip.json passages.json   # offline, as often as you like
+npm run --silent cicerone -- check --trip trip.json passages.json --sources sources.json   # offline, as often as you like
 npm run cicerone save ID passages.json           # checks, then writes
 npm run cicerone book ID out.html                # read what you wrote
 ```
@@ -517,38 +518,50 @@ Other faults you will meet:
   a duplicate; use `event`, `craft` or `nearby`.
 - **A passage needs a title** and more than a line of body.
 
-## Before you save: read it back, then audit it
+## Before you save: read the review, then read the book
 
-Render the book and read it chapter by chapter. Passages that are fine alone
-can read badly in sequence, and the only way to find that is to read the
-chapter.
+`check` prints two things. **Faults** block the save and are fixed by fixing
+the writing. Below the coverage line it also prints a **review**: the three
+reviews that found every real problem in the Prague draft, run over your whole
+book. Review notes never block. Each one is a judgement about the book rather
+than a rule about one passage, so a note you have looked at and can defend is
+allowed to stand. A note you have not looked at is not.
 
-Then run the three reviews that found every problem in the Prague draft. Each
-takes a few minutes with a short script over `passages.json` and `trip.json`:
+Always pass `--sources sources.json`. Without it the two length rules cannot
+tell a thin cathedral from a thin bus stop, and they stay silent.
 
-1. **Openings.** List the first five words of every passage, grouped by day.
-   Any shape that repeats within a day, any corridor opening on a distance, any
-   `origin` opening on a date: rewrite.
-2. **Length against importance.** Sort stops by total words and compare with
-   their `sources.json` snippet counts. A famous stop below a supermarket or a
-   café is a gap. Research it further and give it a second passage.
-3. **Depth.** Count passages per stop. Any stop with thick sources and one
-   passage needs an `event` (or `craft`, or `nearby`).
-4. **Claim-free passages.** List every researched passage with no claims. Some
-   are legitimately navigational (timing advice, "turn round and look back").
-   The rest have material nobody researched yet. Research them.
-5. **Silences.** List every stop and corridor with no passage. Each needs a
-   reason you could defend to the traveller, or a passage.
-6. **The first and last chapters.** Do they carry research, or does the book
-   open and close on its thinnest material?
-7. **Same-day repetition.** Read each stop's passage against the corridor that
-   leaves it and the next stop's. The same point twice in a day: give it to
-   the better passage.
-8. **Where the citations point.** Count citations by domain. If Wikipedia is
-   near a quarter, move the monuments onto the institutions that own them.
-9. **Figures against the heading.** Every distance or time in a corridor
-   passage agrees with that corridor's `route.shown`, and no passage states a
-   transit time.
+| rule | what it found in Prague | what to do |
+| --- | --- | --- |
+| `opening-distance` | 15 of 23 corridors opening "Six hundred metres north-east, and…"; after the fix, 13 opening "Ten minutes up and east, and…" instead | Open on what they will see or what happened there. Durations are the same formula in different units. |
+| `opening-date` | 4 of 10 origins opening on a construction date | Keep the date, move it later, find another way in. |
+| `opening-repeat` | "The library hall…" twice on one stop; "There is nothing…" and "There is one thing…" on the same day | Rewrite one. It compares the first two words with numbers taken out. |
+| `thin-famous` | Charles Bridge at 99 words against a bakery at 449 | Research further. It fires only when a much-cited stop is also below the book's median length. |
+| `one-deep` | 24 of 28 stops with one passage, the cathedral among them | Find the `event`. A famous place almost always has one. |
+| `claim-free` | the airport run, 12 km across the outskirts, with nothing sourced | Research it, unless it is genuinely timing advice ("cross on the Town Hall side"). |
+| `silent` | 40 subjects left empty on a judgement that was overruled | Write it, or be able to say in your report exactly why not. |
+| `bare-ends` | the first and last chapters with no claims at all | Research the travel days: the direction of the flight, the shape of the arrival, the margin on the way out. |
+| `same-day-echo` | "apartment blocks where people live" twice, four hours apart | Give the material to the better passage and the other one what only it can say. |
+| `citation-share` | Wikipedia behind a quarter of the first draft's sources, and a third of the finished book's claims | Move the monuments onto the institutions that own them. Any Wanderlog citation is always wrong. |
+| `figures` | "Three kilometres across town" over a heading that prints 4.7 km | Match the heading, or drop the figure; never state a transit time. |
+
+**The reference book still carries some of these.** Run against the finished
+Prague guide, the review reports thirteen corridors opening on their distance or duration, a same-day echo
+about the vineyard's output and a third of its claims resting on Wikipedia.
+The rules were written after that book, and it has not been rewritten to meet
+them. Hold your book to the rules, not to the reference.
+
+**What the review cannot see, so you still read for it:**
+
+- **Paraphrase.** The echo rule matches shared runs of words. "Almost everybody
+  in this square is standing on them without knowing" and, thirty seconds
+  later, "they are easy to walk over twice without seeing" share none, and the
+  second one deflated the first.
+- **Sequence.** Render the book and read each chapter start to finish.
+  Passages that are fine alone can read badly in order, and a corridor that
+  repeats the stop it just left only shows up when you read them together.
+- **Truth.** Every rule here is about shape. None of them can tell you whether
+  a sourced sentence is actually supported by its source. That is still rule 1,
+  and it is still on you.
 
 ## When you are done
 

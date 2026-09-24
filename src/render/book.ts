@@ -1,7 +1,10 @@
-import type { Corridor, Coordinates, Flight, Guide, Leg, Passage, Photo, Place, PlaceFacts, RouteFact, Stay, Subject, Trip } from '../domain/types.ts'
+import type { Corridor, Coordinates, Flight, Guide, Leg, Passage, Photo, Place, PlaceFacts, Stay, Subject, Trip } from '../domain/types.ts'
 import { imageUrl } from '../import/wanderlogPlaces.ts'
 import { metresBetween } from '../corridor/legs.ts'
 import { dayDirectionsUrl, directionsLabel, directionsUrl } from './directions.ts'
+import { costText } from './cost.ts'
+
+export { costText } from './cost.ts'
 
 /**
  * The book.
@@ -846,33 +849,6 @@ function cost(leg?: Leg): string {
   const route = leg?.route
   if (!route) return ''
   return `<span class="corridor-cost">${escapeHtml(costText(route))}</span>`
-}
-
-/**
- * The corridor head's figures as plain text: "530 m · 6 min", or "15.1 km".
- *
- * Exported because the routine is handed exactly this string in its brief.
- * A passage that says "twenty minutes" under a head that says 25 MIN is the
- * book contradicting itself in adjacent lines, and the only reliable way to
- * stop it is for the writer and the page to read one formatter.
- */
-export function costText(route: RouteFact): string {
-  const parts = [distanceText(route.metres)]
-  if (route.mode !== 'transit') parts.push(`${Math.max(1, Math.round(route.seconds / 60))} min`)
-  return parts.join(' \u00B7 ')
-}
-
-/**
- * Metric, and rounded to what a walk is actually accurate to.
- *
- * The document's own `text` is rendered for the account that owns the trip,
- * which is imperial here, so a Prague itinerary comes back saying `0.38 mi`
- * about a five-minute walk. The book speaks metres everywhere else and the
- * trip is in Europe; only the raw value is read.
- */
-function distanceText(metres: number): string {
-  if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km`
-  return `${Math.max(10, Math.round(metres / 10) * 10)} m`
 }
 
 function renderCorridor(

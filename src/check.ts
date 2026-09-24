@@ -1,4 +1,5 @@
 import { KIND_SUBJECTS, type Corridor, type Guide, type Place, type Trip } from './domain/types.ts'
+import { reviewGuide, type ReviewNote } from './review.ts'
 
 /**
  * What a guide has to satisfy before it is saved.
@@ -9,10 +10,11 @@ import { KIND_SUBJECTS, type Corridor, type Guide, type Place, type Trip } from 
  * anybody, over any guide, at any time, with no model in the loop.
  *
  * Two kinds of finding. A `fault` is a rule broken and blocks the save. A
- * `note` is the shape of the guide reported back: how much of it is sourced,
- * where it is thin, what it left out. Notes never block, because "thin" is a
- * legitimate answer for a place there is nothing to say about, and the whole
- * design depends on that staying legitimate.
+ * review note is the shape of the guide reported back: openings that have
+ * become a formula, a famous stop written thinner than a supermarket, where
+ * the citations point. Notes never block, because each one is a judgement
+ * about the whole book rather than a rule about one passage, and a writer
+ * who has looked and disagrees is allowed to be right. See `review.ts`.
  */
 
 export interface Fault {
@@ -37,6 +39,8 @@ export interface CheckResult {
   ok: boolean
   faults: Fault[]
   coverage: Coverage
+  /** The self-review. Reported, never blocking. */
+  review: ReviewNote[]
 }
 
 /**
@@ -91,6 +95,8 @@ export interface CheckInput {
   trip: Trip
   corridors: Corridor[]
   guide: Guide
+  /** Snippet counts per stop from `cicerone sources`, for the length rules. */
+  snippets?: Map<string, number>
 }
 
 export function checkGuide(input: CheckInput): CheckResult {
@@ -189,7 +195,12 @@ export function checkGuide(input: CheckInput): CheckResult {
     }
   }
 
-  return { ok: faults.length === 0, faults, coverage: coverageOf(trip, corridors, guide) }
+  return {
+    ok: faults.length === 0,
+    faults,
+    coverage: coverageOf(trip, corridors, guide),
+    review: reviewGuide(input),
+  }
 }
 
 function coverageOf(trip: Trip, corridors: Corridor[], guide: Guide): Coverage {
