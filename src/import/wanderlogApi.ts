@@ -95,6 +95,9 @@ export function interpretTripResponse(input: {
  * `session` is optional and only needed for a trip that is not shared by key
  * at all. Passing one puts a credential in reach of this process, so the
  * scheduled sync deliberately does not.
+ *
+ * Not from a page: wanderlog.com sends no CORS headers, so a browser drops the
+ * response. The web app goes through fetchTripInBrowser in web/wanderlog.ts.
  */
 export async function fetchTrip(
   key: string,

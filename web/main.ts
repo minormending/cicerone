@@ -6,7 +6,7 @@ import { renderBook } from '../src/render/book.ts'
 import { dayIndexFor, renderNow, whereAt } from '../src/render/now.ts'
 import { cityFrom } from '../src/photos/illustrate.ts'
 import { describe, search, trackDownload, vouchedFor, type Candidate } from '../src/photos/unsplash.ts'
-import { fetchTrip } from '../src/import/wanderlogApi.ts'
+import { fetchTripInBrowser } from './wanderlog.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
 import type { Corridor, Guide, Subject, Trip } from '../src/domain/types.ts'
 import { mountAuth } from './auth.ts'
@@ -152,7 +152,7 @@ async function runImport(pasted: string): Promise<void> {
   importBtn.disabled = true
   setStatus('Fetching the trip…')
   try {
-    const fetched = await fetchTrip(key)
+    const fetched = await fetchTripInBrowser(key)
     if (!fetched.ok) {
       introNote.textContent = fetched.reason
       setStatus('')
