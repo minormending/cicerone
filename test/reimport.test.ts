@@ -183,6 +183,21 @@ test('the fingerprint moves with the itinerary and not with the routes', () => {
   assert.notEqual(fingerprint(legacy), fingerprint(base), 'an old graph always re-imports once, onto stable ids')
 })
 
+test('a trip read back out of jsonb, keys reordered, is still unchanged', () => {
+  // Postgres keeps object keys in its own order. The first daily check
+  // compared plain JSON and called two untouched trips changed.
+  const places = [stop('1', 'Hotel', 1)]
+  const fresh: Trip = {
+    ...tripOf(places),
+    stays: [{ name: 'Montana Hotel', checkIn: '2026-03-14', checkOut: '2026-03-16', placeId: 'ChIJ' }],
+  }
+  const stored = JSON.parse(
+    '{"id":"t","title":"Prague","legs":[],"places":' + JSON.stringify(places) +
+      ',"stays":[{"name":"Montana Hotel","checkIn":"2026-03-14","placeId":"ChIJ","checkOut":"2026-03-16"}]}',
+  ) as Trip
+  assert.equal(fingerprint(stored), fingerprint(fresh))
+})
+
 // ---- the store, against an in-memory database --------------------------------------
 
 type Row = Record<string, unknown>

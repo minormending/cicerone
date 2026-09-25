@@ -242,11 +242,29 @@ export function planReimport(r: Reconciliation, passages: Passage[], photos: Pho
  * onto stable ids by itself.
  */
 export function fingerprint(trip: Trip): string {
-  return JSON.stringify({
+  return canonical({
     title: trip.title,
     departsOn: trip.departsOn ?? null,
     stops: scheduled(trip).map((p) => [p.sourceId ?? `legacy:${p.id}`, p.name, p.dayIndex, p.arrive ?? null, p.depart ?? null, (p.note ?? '').trim()]),
     stays: trip.stays ?? [],
     flights: trip.flights ?? [],
   })
+}
+
+/**
+ * JSON with every object's keys sorted, so equal values print equally.
+ *
+ * Needed because the stored side comes back out of a `jsonb` column, and
+ * Postgres keeps an object's keys in its own order rather than the order they
+ * were written. The first daily check compared plain JSON.stringify output and
+ * reported both trips as changed on a morning when nobody had touched either:
+ * the stays read back as {name, checkIn, placeId, checkOut}, fresh from the
+ * import they were {name, checkIn, checkOut, placeId}.
+ */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]]))
+      : v,
+  )
 }
