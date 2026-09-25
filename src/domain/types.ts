@@ -13,7 +13,22 @@ export interface Coordinates {
 }
 
 export interface Place {
+  /**
+   * `place:<sourceId>` wherever the import has one, which for Wanderlog is
+   * every stop. Until 2026-09-25 this was `place:<position>:<name>`, and the
+   * position was a running count across the whole trip — so adding one stop
+   * on day three renumbered every stop after it, and nineteen passages of a
+   * finished book fell off the page on the next import. Graphs saved before
+   * then still carry the old form; `reconcile` maps them across.
+   */
   id: string
+  /**
+   * The source's own id for this stop: Wanderlog's block id. It survives
+   * reordering, retiming, notes and moves between days — 94 of the 100 blocks
+   * in a Prague document were still there with the same id after a heavy
+   * week of edits, and the other six were the stops that had been deleted.
+   */
+  sourceId?: string
   name: string
   coords: Coordinates
   /** 1-based, in trip order. Absent for a place on no day: a standing list. */

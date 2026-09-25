@@ -212,6 +212,8 @@ interface Extracted {
   travelMode?: TransportMode
   placeId?: string
   imageKey?: string
+  /** Wanderlog's id for the block this stop came from. */
+  blockId?: string
 }
 
 /** A section is an object carrying a heading; days and buckets both.
@@ -425,6 +427,10 @@ function collectPlaces(
         if (stated) extracted.travelMode = stated
         const placeId = candidate['place_id']
         if (typeof placeId === 'string' && placeId) extracted.placeId = placeId
+        const blockId = node['id']
+        if ((typeof blockId === 'number' && Number.isFinite(blockId)) || (typeof blockId === 'string' && blockId)) {
+          extracted.blockId = String(blockId)
+        }
         // The traveller's chosen picture first, then whatever the block holds.
         const selected = node['selectedImageKey']
         const keys = node['imageKeys']
@@ -461,6 +467,23 @@ function findSections(node: unknown, out: Array<Record<string, unknown>>, seen: 
     return
   }
   for (const value of Object.values(node)) findSections(value, out, seen)
+}
+
+/**
+ * A stop's id: the source's own where there is one, which is always.
+ *
+ * The positional form survives only as a fallback, for a document with no
+ * block ids — a hand-built fixture, or a source that is not Wanderlog. It is
+ * the form every graph saved before 2026-09-25 carries.
+ */
+function placeIdFor(entry: Extracted, index: number, taken: Set<string>): string {
+  if (!entry.blockId) return slugId(entry.name, index)
+  // A block id should never repeat within one trip. If a document ever does
+  // it, the second one gets a suffix rather than silently sharing passages.
+  let id = `place:${entry.blockId}`
+  for (let n = 2; taken.has(id); n++) id = `place:${entry.blockId}:${n}`
+  taken.add(id)
+  return id
 }
 
 function slugId(name: string, index: number): string {
@@ -599,6 +622,7 @@ export function tripFromWanderlog(
   const places: Place[] = []
   let index = 0
   let dayIndex = 0
+  const taken = new Set<string>()
 
   const days = sections.filter(isDay)
   // Days first, in order, then the buckets — which keep their places (the
@@ -615,10 +639,11 @@ export function tripFromWanderlog(
 
     for (const entry of found) {
       const place: Place = {
-        id: slugId(entry.name, index++),
+        id: placeIdFor(entry, index++, taken),
         name: entry.name,
         coords: entry.coords,
       }
+      if (entry.blockId) place.sourceId = entry.blockId
       if (scheduled) place.dayIndex = dayIndex
       else report.unscheduled++
       if (entry.time) place.arrive = entry.time

@@ -34,6 +34,7 @@ import { lightPassages } from '../src/light/light.ts'
 import { Store } from '../src/backend/store.ts'
 import { fetchTrip, tripUrl } from '../src/import/wanderlogApi.ts'
 import { tripFromWanderlog } from '../src/import/wanderlog.ts'
+import { fingerprint, type ReimportPlan, type Reconciliation } from '../src/import/reconcile.ts'
 import { imageUrl, researchTrip } from '../src/import/wanderlogPlaces.ts'
 import { cityFrom, illustrate } from '../src/photos/illustrate.ts'
 import { dateOf, escapeHtml, renderBook } from '../src/render/book.ts'
@@ -52,12 +53,14 @@ const USAGE = `cicerone — the seam between the routine and the database
   cicerone check <id> [file.json]  check without writing
   cicerone check --trip <trip.json> <passages.json>   check with no database
       --sources <sources.json>     ...and compare each stop's length with how much is written about it
-  cicerone import <wanderlog-key>  fetch a trip and store it
+  cicerone import <wanderlog-key>  fetch a trip and store it, keeping any book attached
+  cicerone refresh [id]            re-import every trip that changed in Wanderlog (the daily check)
   cicerone photos <id>             find and store a photograph per subject
   cicerone book <id> [out.html]    render the guide as one standalone file
       --print                      ...as paper would show it, for checking the print styles
   cicerone guide <id> [out.json]   the passages already written, as JSON
   cicerone sources <id> [out.json] what Wanderlog already cites about each stop
+  cicerone retired <id> [out.json] passages set aside when their stop left the trip
 
 Read from .env in the project root, or from the environment:
   PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY   the project
@@ -303,6 +306,39 @@ function printReview(notes: ReviewNote[], hadSnippets: boolean): void {
   if (!hadSnippets) {
     console.log('  (pass --sources <sources.json> to compare each stop\'s length with how much is written about it)')
   }
+}
+
+/**
+ * What a re-import did to a book, in the order somebody needs it.
+ *
+ * What is new first, because that is the work. Then what was set aside, so
+ * nobody wonders where a paragraph went. Then every passage sitting on a stop
+ * whose note or time changed, because the routine is forbidden to rewrite
+ * those and a person has to read them against the new brief.
+ */
+function printReimport(r: Reconciliation, plan: ReimportPlan): void {
+  const moved = plan.rekeyPassages.filter((m) => m.kind !== 'day').length
+  console.log(
+    `  kept ${moved} passage${moved === 1 ? '' : 's'} with ${moved === 1 ? 'its stop' : 'their stops'}` +
+      (plan.rekeyPhotos.length ? `, and ${plan.rekeyPhotos.length} photo${plan.rekeyPhotos.length === 1 ? '' : 's'}` : ''),
+  )
+  if (r.added.length > 0) {
+    console.log(`  new, with nothing written yet (${r.added.length}):`)
+    for (const a of r.added) console.log(`    ${a.subject.kind}:${a.subject.id}  ${a.label}`)
+  }
+  if (plan.retire.length > 0) {
+    console.log(`  set aside in retired_passages, because their subject left the trip (${plan.retire.length}):`)
+    for (const p of plan.retire) console.log(`    ${p.id}  "${p.title}"`)
+  }
+  if (plan.reread.length > 0) {
+    console.log(`  on stops whose brief changed — a person should reread these (${plan.reread.length}):`)
+    for (const x of plan.reread) console.log(`    ${x.passageId}  ${x.stop}: ${x.changes.join('; ')}`)
+  }
+  console.log(
+    r.newWork
+      ? '  the guide is now pending: there are new stops or corridors to write'
+      : '  the guide stays current: nothing was added',
+  )
 }
 
 /**
@@ -607,7 +643,7 @@ async function main(): Promise<void> {
     const scheduled = imported.places - imported.unscheduled
     if (scheduled === 0) die(`${tripUrl(key)} has no scheduled stops.`)
 
-    const tripId = await store.saveTrip({
+    const result = await store.importTrip({
       title: trip.title,
       ...(trip.departsOn ? { departsOn: trip.departsOn } : {}),
       source: 'wanderlog',
@@ -615,11 +651,63 @@ async function main(): Promise<void> {
       graph: withLegs(trip),
     })
     const corridors = corridorsOf(withLegs(trip))
-    console.log(`${tripId}\t${trip.title}`)
+    console.log(`${result.id}\t${trip.title}`)
     console.log(
       `${scheduled} stops, ${corridors.length} corridors` +
         (imported.unscheduled > 0 ? `, ${imported.unscheduled} places left in standing lists` : ''),
     )
+    if (!result.created) printReimport(result.reconciliation, result.plan)
+    return
+  }
+
+  /*
+   * The daily check: has anybody changed a trip in Wanderlog?
+   *
+   * One request per trip, a few seconds apart, for the owner's own trips and
+   * nothing else. A trip whose itinerary is unchanged is left entirely alone —
+   * not saved, not re-dated — so a quiet day costs the database nothing and
+   * sends the routine nowhere. A changed one goes through the same import
+   * everything else does, which keeps its book attached.
+   */
+  if (command === 'refresh') {
+    const only = rest[0]
+    const store = await connect()
+    const trips = (await store.listTrips()).filter((t) => !only || t.id === only)
+    if (only && trips.length === 0) die(`No trip ${only}.`)
+
+    let first = true
+    for (const saved of trips) {
+      if (saved.source !== 'wanderlog') {
+        console.log(`${saved.id}\t${saved.title}\tnot a Wanderlog trip, skipped`)
+        continue
+      }
+      if (!first) await new Promise((resolve) => setTimeout(resolve, 3_000))
+      first = false
+
+      const fetched = await fetchTrip(saved.sourceKey)
+      if (!fetched.ok) {
+        // Reported and carried on past: one trip whose link was unshared
+        // must not stop the others being checked.
+        console.log(`${saved.id}\t${saved.title}\tcould not fetch: ${fetched.reason}`)
+        continue
+      }
+      const { trip } = tripFromWanderlog(fetched.document, {})
+      const graph = withLegs(trip)
+      if (fingerprint(graph) === fingerprint(saved.graph)) {
+        console.log(`${saved.id}\t${saved.title}\tunchanged`)
+        continue
+      }
+
+      const result = await store.importTrip({
+        title: trip.title,
+        ...(trip.departsOn ? { departsOn: trip.departsOn } : {}),
+        source: 'wanderlog',
+        sourceKey: saved.sourceKey,
+        graph,
+      })
+      console.log(`${saved.id}\t${saved.title}\tchanged in Wanderlog, re-imported`)
+      if (!result.created) printReimport(result.reconciliation, result.plan)
+    }
     return
   }
 
@@ -669,6 +757,31 @@ async function main(): Promise<void> {
     if (out) {
       writeFileSync(out, json, 'utf8')
       console.log(`${guide.passages.length} passages \u2192 ${out}`)
+    } else {
+      process.stdout.write(json)
+    }
+    return
+  }
+
+  /*
+   * What a re-import set aside, for reuse rather than restoration.
+   *
+   * A passage whose stop left the trip is kept whole in retired_passages. Its
+   * facts were researched and its claims were checked, and when the new
+   * itinerary crosses the same ground — Loreta moved between the two palaces
+   * it used to follow, and the walk to it still passes the same bells — that
+   * research is worth more than a fresh search. It comes back as a new
+   * passage about the new subject, reread against the new brief.
+   */
+  if (command === 'retired') {
+    const id = rest[0]
+    if (!id) die('cicerone retired <id> [out.json]')
+    const store = await connect()
+    const retired = await store.retiredPassages(id)
+    const json = JSON.stringify(retired, null, 2)
+    if (rest[1]) {
+      writeFileSync(rest[1], json, 'utf8')
+      console.log(`${retired.length} set-aside passage${retired.length === 1 ? '' : 's'} → ${rest[1]}`)
     } else {
       process.stdout.write(json)
     }

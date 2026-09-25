@@ -167,7 +167,10 @@ async function runImport(pasted: string): Promise<void> {
       return
     }
 
-    const id = await store.saveTrip({
+    // Through importTrip, never saveTrip: pasting the link of a trip that
+    // already has a book is how people update it, and a plain save would
+    // strand every passage whose stop had moved.
+    const result = await store.importTrip({
       title: trip.title,
       ...(trip.departsOn ? { departsOn: trip.departsOn } : {}),
       source: 'wanderlog',
@@ -175,8 +178,18 @@ async function runImport(pasted: string): Promise<void> {
       graph: withLegs(trip),
     })
     keyField.value = ''
-    await openTrip(id)
-    setStatus(`Imported ${scheduled} stops. The guide is written by the routine, not here — it takes a while.`)
+    await openTrip(result.id)
+    if (result.created) {
+      setStatus(`Imported ${scheduled} stops. The guide is written by the routine, not here — it takes a while.`)
+    } else {
+      const added = result.reconciliation.added.length
+      const setAside = result.plan.retire.length
+      setStatus(
+        `Updated. ${added === 0 ? 'Nothing new to write' : `${added} new ${added === 1 ? 'stop or walk' : 'stops and walks'} for the routine to write`}` +
+          (setAside ? `; ${setAside} passage${setAside === 1 ? '' : 's'} set aside for stops that left the trip` : '') +
+          '.',
+      )
+    }
   } catch (err) {
     introNote.textContent = `Could not import: ${(err as Error).message}`
     setStatus('')

@@ -56,6 +56,10 @@ Work through the brief subject by subject. Save once, at the end.
 
 - **`days`**: each day's date and its stops in order. You write a `chapter`
   for every one.
+Subject ids are Wanderlog's own ids for each stop (`place:5155764`), so
+they survive the traveller reordering, retiming or moving stops. Corridor ids
+are built from the two stops they join.
+
 - **`places`**: every scheduled stop, in the traveller's own order, with
   `arrive` and `depart` where they set a time, coordinates, and `note` (what
   they typed against it; see the next section). **`stay: true`** marks a visit
@@ -109,6 +113,44 @@ reader's attention and risks contradicting the page:
   and times, check-in with the number of nights, check-out.
 - **Facts** from Google: hours, rating, website, and the dishes a kitchen is
   known for.
+
+## When the trip has changed
+
+Travellers keep editing after the book is written. The Prague trip gained five
+stops, lost two and had an afternoon reordered in the week after its book was
+finished. The daily check (`cicerone refresh`) re-imports a trip when that
+happens, and the import keeps the book attached:
+
+- **Passages on stops and walks that survive stay where they are.**
+- **Passages on stops and walks that are gone are set aside** in
+  `retired_passages`, never deleted. `cicerone retired ID` lists them.
+- **What is new is listed** by `refresh`, and shows up as `silent` in the
+  review. That is the work.
+- **Passages on stops whose note or time changed are listed for a person to
+  reread.** Never rewrite them yourself. Report them.
+
+Three things to do with a changed trip:
+
+1. **Write the new stops and walks like any others,** held to everything in
+   this skill.
+2. **Look in the set-aside passages before researching a new walk.** A
+   reordered day often puts a new walk over the same ground as an old one. In
+   Prague, Loreta moved between the two palaces it used to follow, and the
+   walk to it still passes the same carillon. The old passage's facts were
+   researched and its claims checked. Reuse them in a new passage about the
+   new subject, and reread every sentence against the new brief: the old
+   timing advice ("leave a little before one") was wrong for the new arrival
+   time. Give it a new id.
+3. **Read the chapter of every changed day, and report any that is no longer
+   true.** A chapter is keyed by the day, so it survives any edit, including
+   one that makes it wrong: Prague's day three kept promising "dinner at a
+   quarter to ten" after the dinner had been deleted from the itinerary. Like
+   any existing passage it is not yours to rewrite. Name it, quote the
+   sentence, and say what changed.
+
+A stop dropped from the middle of a day leaves a new walk between its
+neighbours. That walk is new work even though nothing was added, and
+`refresh` lists it.
 
 ## Read the notes first. Before sources, before the web.
 

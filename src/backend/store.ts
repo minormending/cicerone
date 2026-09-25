@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Guide, Passage, Photo, PlaceFacts, Subject, Trip } from '../domain/types.ts'
+import { planReimport, reconcile, type ReimportPlan, type Reconciliation } from '../import/reconcile.ts'
 
 /**
  * Reading and writing trips and guides.
@@ -105,6 +106,18 @@ function toPhoto(row: PhotoRow): Photo {
  */
 export type CiceroneClient = SupabaseClient<any, 'public', string, any, any>
 
+export interface TripInput {
+  title: string
+  departsOn?: string
+  source: 'wanderlog' | 'polarsteps'
+  sourceKey: string
+  graph: Trip
+}
+
+export type ImportResult =
+  | { id: string; created: true }
+  | { id: string; created: false; reconciliation: Reconciliation; plan: ReimportPlan }
+
 export class Store {
   readonly #db: CiceroneClient
   readonly #owner: string
@@ -135,15 +148,18 @@ export class Store {
 
   /**
    * Upsert on (owner, source, source_key), so re-importing a trip updates it
-   * in place. `imported_at` moves, which is what tells a guide it is stale.
+   * in place.
+   *
+   * `stale` decides whether `imported_at` moves, and `imported_at` is what
+   * `pending` compares the guide against — so it means "there is something
+   * new to write", not "the document was fetched". A re-import that only
+   * changed notes updates the graph and leaves the guide current.
+   *
+   * Not for re-importing a trip that has a guide: that goes through
+   * `importTrip`, which keeps the passages attached to the stops they are
+   * about. Calling this directly on such a trip is how a book loses its pages.
    */
-  async saveTrip(input: {
-    title: string
-    departsOn?: string
-    source: 'wanderlog' | 'polarsteps'
-    sourceKey: string
-    graph: Trip
-  }): Promise<string> {
+  async saveTrip(input: TripInput & { stale?: boolean }): Promise<string> {
     const { data, error } = await this.#db
       .from('trips')
       .upsert(
@@ -154,7 +170,7 @@ export class Store {
           source: input.source,
           source_key: input.sourceKey,
           graph: input.graph,
-          imported_at: new Date().toISOString(),
+          ...(input.stale === false ? {} : { imported_at: new Date().toISOString() }),
         },
         { onConflict: 'owner,source,source_key' },
       )
@@ -162,6 +178,127 @@ export class Store {
       .single()
     if (error) throw new Error(error.message)
     return (data as { id: string }).id
+  }
+
+  /** The trip already imported from this source key, if there is one. */
+  async findTrip(source: TripInput['source'], sourceKey: string): Promise<SavedTrip | null> {
+    const { data, error } = await this.#db
+      .from('trips')
+      .select('id,title,departs_on,source,source_key,graph,imported_at,updated_at')
+      .eq('source', source)
+      .eq('source_key', sourceKey)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? toTrip(data as TripRow) : null
+  }
+
+  /**
+   * Import a trip, keeping an existing book attached to it.
+   *
+   * The only way a trip should enter the database, from the site and the CLI
+   * alike. A first import is a plain save. A re-import is reconciled: the
+   * passages and photos of every stop and corridor that survived follow it to
+   * its current id, the written passages of those that left are set aside in
+   * `retired_passages`, and the graph is saved last.
+   *
+   * The order is for the run that dies halfway. Everything before the graph
+   * is saved is computed from the old graph, and a passage already moved to a
+   * new id is neither in the old graph's keep list nor its gone list, so a
+   * second run leaves it alone and finishes the rest.
+   */
+  async importTrip(input: TripInput): Promise<ImportResult> {
+    const existing = await this.findTrip(input.source, input.sourceKey)
+    if (!existing) return { id: await this.saveTrip(input), created: true }
+
+    const reconciliation = reconcile(existing.graph, input.graph)
+    const guide = await this.getGuide(existing.id)
+    const plan = planReimport(reconciliation, guide.passages, guide.photos)
+    const tripId = existing.id
+
+    if (plan.retire.length > 0) {
+      const names = new Map(existing.graph.places.map((p) => [p.id, p]))
+      const reason = (p: Passage) => {
+        if (p.subject.kind === 'place') {
+          const stop = names.get(p.subject.id)
+          return `day ${stop?.dayIndex ?? '?'}: ${stop?.name ?? p.subject.id} left the trip`
+        }
+        return p.subject.kind === 'day' ? `day ${p.subject.id} left the trip` : 'this stretch is no longer walked'
+      }
+      const set = await this.#db.from('retired_passages').upsert(
+        plan.retire.map((p) => ({
+          trip_id: tripId,
+          id: p.id,
+          subject_kind: p.subject.kind,
+          subject_id: p.subject.id,
+          kind: p.kind,
+          title: p.title,
+          body: p.body,
+          claims: p.claims,
+          sources: p.sources,
+          written_at: p.writtenAt,
+          reason: reason(p),
+        })),
+        { onConflict: 'trip_id,id' },
+      )
+      if (set.error) throw new Error(`setting passages aside: ${set.error.message}`)
+    }
+
+    const drop = [...plan.retire.map((p) => p.id), ...plan.dropComputed]
+    if (drop.length > 0) {
+      const gone = await this.#db.from('passages').delete().eq('trip_id', tripId).in('id', drop)
+      if (gone.error) throw new Error(`removing set-aside passages: ${gone.error.message}`)
+    }
+
+    if (plan.rekeyPassages.length > 0) {
+      const moves = new Map(plan.rekeyPassages.map((m) => [m.id, m.to]))
+      const moved = await this.#db.from('passages').upsert(
+        guide.passages
+          .filter((p) => moves.has(p.id))
+          .map((p) => ({
+            id: p.id,
+            trip_id: tripId,
+            subject_kind: p.subject.kind,
+            subject_id: moves.get(p.id),
+            kind: p.kind,
+            title: p.title,
+            body: p.body,
+            claims: p.claims,
+            sources: p.sources,
+            computed: p.computed ?? false,
+            written_at: p.writtenAt,
+          })),
+        { onConflict: 'id' },
+      )
+      if (moved.error) throw new Error(`moving passages to their stops' new ids: ${moved.error.message}`)
+    }
+
+    for (const move of plan.rekeyPhotos) {
+      const moved = await this.#db
+        .from('photos')
+        .update({ subject_id: move.to })
+        .eq('trip_id', tripId)
+        .eq('subject_kind', move.kind)
+        .eq('subject_id', move.from)
+      if (moved.error) throw new Error(`moving a photo to its stop's new id: ${moved.error.message}`)
+    }
+
+    await this.saveTrip({ ...input, stale: reconciliation.newWork })
+    return { id: tripId, created: false, reconciliation, plan }
+  }
+
+  /** What has been set aside for a trip, newest first. */
+  async retiredPassages(tripId: string): Promise<Array<Passage & { reason: string; retiredAt: string }>> {
+    const { data, error } = await this.#db
+      .from('retired_passages')
+      .select('id,subject_kind,subject_id,kind,title,body,claims,sources,written_at,retired_at,reason')
+      .eq('trip_id', tripId)
+      .order('retired_at', { ascending: false })
+    if (error) throw new Error(error.message)
+    return (data as Array<PassageRow & { retired_at: string; reason: string }>).map((r) => ({
+      ...toPassage({ ...r, trip_id: tripId, computed: false }),
+      reason: r.reason,
+      retiredAt: r.retired_at,
+    }))
   }
 
   async getGuide(tripId: string): Promise<Guide> {
